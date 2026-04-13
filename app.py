@@ -319,7 +319,7 @@ class App(_AppBase):
                  wraplength=360).pack(side="left", fill="x", expand=True)
         self.btn_open = self._btn(row1, self.t("btn_open"), self._open_file, color=ACCENT)
         self.btn_open.pack(side="right", padx=(8, 0))
-        self.btn_screen = self._btn(row1, self.t("btn_screen"), self._select_screen, color=BG_BTN)
+        self.btn_screen = self._btn(row1, self.t("btn_screen"), self._select_screen, color=BG_BTN, fg=FG)
         self.btn_screen.pack(side="right")
 
         # fila 1c: selector de monitor
@@ -412,10 +412,10 @@ class App(_AppBase):
         row4.pack(fill="x")
 
         self.btn_play  = self._btn(row4, self.t("btn_start"),   self._start,               color=ACCENT2)
-        self.btn_pause = self._btn(row4, self.t("btn_pause"),   self._pause,               color=BG_BTN)
+        self.btn_pause = self._btn(row4, self.t("btn_pause"),   self._pause,               color=BG_BTN, fg=FG)
         self.btn_stop  = self._btn(row4, self.t("btn_stop"),    self._stop,                color=RED)
-        self.btn_filters_open  = self._btn(row4, self.t("btn_filters"), self._open_filter_window,  color=BG_BTN)
-        self.btn_overlay_open  = self._btn(row4, self.t("btn_overlay"), self._open_overlay_window, color=BG_BTN)
+        self.btn_filters_open  = self._btn(row4, self.t("btn_filters"), self._open_filter_window,  color=BG_BTN, fg=FG)
+        self.btn_overlay_open  = self._btn(row4, self.t("btn_overlay"), self._open_overlay_window, color=BG_BTN, fg=FG)
         self.btn_play.pack(side="left", padx=(0, 8))
         self.btn_pause.pack(side="left", padx=(0, 8))
         self.btn_stop.pack(side="left", padx=(0, 20))
@@ -467,10 +467,10 @@ class App(_AppBase):
         return lbl
 
     @staticmethod
-    def _btn(parent, text: str, cmd, color: str) -> tk.Button:
+    def _btn(parent, text: str, cmd, color: str, fg: str = "#ffffff") -> tk.Button:
         return tk.Button(parent, text=text, command=cmd,
-                         bg=color, fg="#ffffff",
-                         activebackground=color, activeforeground="#ffffff",
+                         bg=color, fg=fg,
+                         activebackground=color, activeforeground=fg,
                          relief="flat", font=("Segoe UI", 10, "bold"),
                          padx=14, pady=6, cursor="hand2", bd=0)
 

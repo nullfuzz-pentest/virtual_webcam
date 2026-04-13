@@ -1,8 +1,8 @@
-# Virtual Webcam Emulator v1.1
+# Virtual Webcam Emulator v1.2
 
 Emula una webcam virtual usando imágenes, videos o captura de pantalla como fuente, con interfaz gráfica en tiempo real.
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.1-purple)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.2-purple)
 
 ---
 
@@ -17,6 +17,7 @@ Emula una webcam virtual usando imágenes, videos o captura de pantalla como fue
 - Modo Crop (relleno) y Letterbox (barras negras)
 - Seek interactivo en videos
 - Drag & drop de archivos (requiere `tkinterdnd2`)
+- Clic en el área de preview para abrir el selector de archivos cuando no hay fuente cargada
 - Interfaz multiidioma: Español, English, Português, 中文
 - Temas de interfaz: Dark, Blue, White
 - Detección automática del idioma del sistema
@@ -91,7 +92,7 @@ app.py              — ventana principal (GUI Tkinter)
 
 ## Changelog
 
-### v1.1
+### v1.2 (latest)
 
 - Soporte de GIFs animados con temporización por frame
 - Zoom digital (1×–5×) con slider y atajos de teclado `+` / `-`
@@ -102,6 +103,7 @@ app.py              — ventana principal (GUI Tkinter)
 - Atajo `[O]` para la ventana de overlay y `[S]` para iniciar
 - Información del archivo movida a la barra de estado
 - Supresión de errores h264 en consola durante reproducción de video
+- Área de preview interactiva: muestra zona de drop con icono ⬆, borde punteado y texto multiidioma; clic abre el selector de archivos directamente
 
 ### v1.0
 

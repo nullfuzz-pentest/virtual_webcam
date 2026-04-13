@@ -33,7 +33,7 @@ from stream_thread import StreamThread
 class App(_AppBase):
     def __init__(self):
         super().__init__()
-        self.title("Virtual Webcam v1.1")
+        self.title("Virtual Webcam v1.2")
         self.configure(bg=BG)
         self.resizable(False, False)
 
@@ -995,7 +995,7 @@ class App(_AppBase):
         hdr.pack(fill="x")
         tk.Label(hdr, text="Virtual Webcam", font=("Segoe UI", 18, "bold"),
                  bg=ACCENT, fg="#ffffff").pack()
-        tk.Label(hdr, text=f"v1.1  ·  {self.t('title_sub')}", font=("Segoe UI", 11),
+        tk.Label(hdr, text=f"v1.2  ·  {self.t('title_sub')}", font=("Segoe UI", 11),
                  bg=ACCENT, fg="#dde").pack()
 
         body = tk.Frame(win, bg=BG, padx=28, pady=20)

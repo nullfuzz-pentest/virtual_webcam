@@ -420,7 +420,7 @@ class App(_AppBase):
         self.btn_pause.pack(side="left", padx=(0, 8))
         self.btn_stop.pack(side="left", padx=(0, 20))
         self.btn_filters_open.pack(side="left", padx=(0, 8))
-        self.btn_overlay_open.pack(side="left")
+        self.btn_overlay_open.pack(side="left", padx=(0, 8))
 
         self.btn_pause.config(state="disabled")
         self.btn_stop.config(state="disabled")

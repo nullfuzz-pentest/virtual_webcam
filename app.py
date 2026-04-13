@@ -271,7 +271,7 @@ class App(_AppBase):
         self.preview_outer = tk.Frame(self, bg="#000000", padx=2, pady=2)
         self.preview_outer.pack(padx=16, pady=(0, 10))
         self.canvas = tk.Canvas(self.preview_outer, width=self.preview_w, height=self.preview_h,
-                                bg="#000000", highlightthickness=0)
+                                bg="#000000", highlightthickness=0, cursor="hand2")
         self.canvas.pack()
         self.canvas.bind("<Button-1>",        self._on_canvas_press)
         self.canvas.bind("<B1-Motion>",       self._on_canvas_drag)
@@ -535,9 +535,31 @@ class App(_AppBase):
         pw, ph = self.preview_w, self.preview_h
         self.canvas.delete("all")
         self.canvas.create_rectangle(0, 0, pw, ph, fill="#111118")
-        self.canvas.create_text(pw // 2, ph // 2,
-                                text=self.t("no_signal"), fill=FG_DIM,
-                                font=("Segoe UI", 20, "bold"))
+
+        # borde punteado de zona de drop
+        pad = 18
+        dash = (8, 6)
+        self.canvas.create_rectangle(
+            pad, pad, pw - pad, ph - pad,
+            outline=FG_DIM, dash=dash, width=2,
+        )
+
+        cx, cy = pw // 2, ph // 2
+
+        # icono de subida (flecha + bandeja)
+        self.canvas.create_text(cx, cy - 36,
+                                text="⬆", fill=ACCENT,
+                                font=("Segoe UI", 36))
+
+        # texto principal
+        self.canvas.create_text(cx, cy + 18,
+                                text=self.t("no_signal"), fill=FG,
+                                font=("Segoe UI", 14, "bold"))
+
+        # subtexto
+        self.canvas.create_text(cx, cy + 44,
+                                text=self.t("drop_hint"), fill=FG_DIM,
+                                font=("Segoe UI", 10))
 
     # ------------------------------------------------------------------
     # Drag & drop
@@ -635,6 +657,10 @@ class App(_AppBase):
         return cx / self.preview_w * cam_w, cy / self.preview_h * cam_h
 
     def _on_canvas_press(self, event):
+        # Si no hay archivo cargado (placeholder "no signal"), abrir selector
+        if not self._file_loaded and not self._use_screen:
+            self._open_file()
+            return
         if not self._overlay.enabled:
             return
         fx, fy = self._canvas_to_frame(event.x, event.y)

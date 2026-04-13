@@ -9,7 +9,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # ── UI general
         "lang_display"       : "Español",
         "title_sub"          : "emulador",
-        "no_signal"          : "Sin señal",
+        "no_signal"          : "Soltar archivo aquí",
+        "drop_hint"          : "o hacer clic para seleccionar",
         "language_label"     : "Idioma",
         "lbl_theme"          : "Tema",
         # ── etiquetas de control
@@ -110,7 +111,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
         "lang_display"       : "English",
         "title_sub"          : "emulator",
-        "no_signal"          : "No signal",
+        "no_signal"          : "Drop file here",
+        "drop_hint"          : "or click to select",
         "language_label"     : "Language",
         "lbl_theme"          : "Theme",
         "lbl_resolution"     : "Resolution",
@@ -200,7 +202,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "pt": {
         "lang_display"       : "Português",
         "title_sub"          : "emulador",
-        "no_signal"          : "Sem sinal",
+        "no_signal"          : "Soltar arquivo aqui",
+        "drop_hint"          : "ou clique para selecionar",
         "language_label"     : "Idioma",
         "lbl_theme"          : "Tema",
         "lbl_resolution"     : "Resolução",
@@ -290,7 +293,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "zh": {
         "lang_display"       : "中文",
         "title_sub"          : "模拟器",
-        "no_signal"          : "无信号",
+        "no_signal"          : "将文件拖放到此处",
+        "drop_hint"          : "或点击此处选择文件",
         "language_label"     : "语言",
         "lbl_theme"          : "主题",
         "lbl_resolution"     : "分辨率",

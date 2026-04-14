@@ -125,7 +125,8 @@ class App(_AppBase):
         super().__init__()
         self.title("Virtual Webcam v1.4")
         self.configure(bg=BG)
-        self.resizable(False, False)
+        self.resizable(True, True)
+        self.minsize(640, 480)
         self.after(0, self._remove_titlebar_icon)
 
         _prefs               = self._load_prefs()
@@ -163,6 +164,8 @@ class App(_AppBase):
         self._drag_frame_offset: tuple = (0.0, 0.0)
         # debounce para auto-guardado de preferencias
         self._save_after_id: "str | None" = None
+        # id del item de canvas que muestra los frames del stream
+        self._canvas_img_id: "int | None" = None
 
         self._build_ui()
         # aplicar preferencias guardadas que requieren widgets ya creados
@@ -692,7 +695,8 @@ class App(_AppBase):
         self._tooltip_var = tk.StringVar(value="")
         self._tooltip_lbl = tk.Label(status_bar, textvariable=self._tooltip_var,
                                      font=("Segoe UI", 9, "italic"),
-                                     bg=STATUS_BG, fg=ACCENT, anchor="e")
+                                     bg=STATUS_BG, fg=ACCENT, anchor="e",
+                                     width=38)
         self._tooltip_lbl.pack(side="right", padx=(0, 16))
 
         # ── estilos ttk
@@ -782,7 +786,6 @@ class App(_AppBase):
             self.width_var.set(str(cam_w))
             self.height_var.set(str(cam_h))
         self.preview_w, self.preview_h = prev_w, prev_h
-        self.canvas.config(width=prev_w, height=prev_h)
         ratio = cam_w / cam_h if cam_h else 1
         if ratio > 1:
             label = "16:9" if abs(ratio - 16/9) < 0.05 else f"{cam_w}:{cam_h}"
@@ -795,7 +798,10 @@ class App(_AppBase):
         self.update_idletasks()
 
     def _draw_placeholder(self):
-        pw, ph = self.preview_w, self.preview_h
+        _cw = self.canvas.winfo_width()
+        _ch = self.canvas.winfo_height()
+        pw = _cw if _cw > 1 else self.preview_w
+        ph = _ch if _ch > 1 else self.preview_h
         self.canvas.delete("all")
         self.canvas.create_rectangle(0, 0, pw, ph, fill="#111118")
 
@@ -823,6 +829,9 @@ class App(_AppBase):
         self.canvas.create_text(cx, cy + 44,
                                 text=self.t("drop_hint"), fill=FG_DIM,
                                 font=("Segoe UI", 10))
+
+        # item persistente para los frames del stream (encima del placeholder)
+        self._canvas_img_id = self.canvas.create_image(0, 0, anchor="nw")
 
     # ------------------------------------------------------------------
     # Drag & drop
@@ -1302,14 +1311,27 @@ class App(_AppBase):
             self.after(0, self._update_progress, prog, elapsed, total)
 
     def _show_frame(self, rgb: np.ndarray):
-        h, w = rgb.shape[:2]
-        if w != self.preview_w or h != self.preview_h:
-            img = Image.fromarray(rgb).resize((self.preview_w, self.preview_h), Image.LANCZOS)
-        else:
-            img = Image.fromarray(rgb)
+        img = Image.fromarray(rgb)
+        iw, ih = img.size
+        _cw = self.canvas.winfo_width()
+        _ch = self.canvas.winfo_height()
+        pw = _cw if _cw > 1 else self.preview_w
+        ph = _ch if _ch > 1 else self.preview_h
+        if iw != pw or ih != ph:
+            # letterbox: mantiene aspect ratio, sin distorsión
+            scale = min(pw / iw, ph / ih)
+            nw, nh = int(iw * scale), int(ih * scale)
+            img = img.resize((nw, nh), Image.LANCZOS)
+            if nw != pw or nh != ph:
+                canvas_img = Image.new("RGB", (pw, ph), (0, 0, 0))
+                canvas_img.paste(img, ((pw - nw) // 2, (ph - nh) // 2))
+                img = canvas_img
         photo = ImageTk.PhotoImage(img)
         self._last_photo = photo
-        self.canvas.create_image(0, 0, anchor="nw", image=photo)
+        if self._canvas_img_id is None:
+            self._canvas_img_id = self.canvas.create_image(0, 0, anchor="nw", image=photo)
+        else:
+            self.canvas.itemconfig(self._canvas_img_id, image=photo)
 
     def _update_progress(self, prog: float, elapsed: float, total: float):
         self.progress_var.set(prog)

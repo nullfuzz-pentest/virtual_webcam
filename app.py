@@ -161,6 +161,8 @@ class App(_AppBase):
         # drag overlay en canvas
         self._drag_overlay_type: "str | None" = None
         self._drag_frame_offset: tuple = (0.0, 0.0)
+        # debounce para auto-guardado de preferencias
+        self._save_after_id: "str | None" = None
 
         self._build_ui()
         # aplicar preferencias guardadas que requieren widgets ya creados
@@ -199,6 +201,17 @@ class App(_AppBase):
                 self._rotation_cb.current(deg // 90)
             if "mirror" in _prefs:
                 self.mirror_var.set(bool(_prefs["mirror"]))
+        # auto-guardado de preferencias al cambiar filtros / zoom
+        for _var in (self._bri_var, self._con_var, self._sat_var,
+                     self._blur_var, self._zoom_var):
+            _var.trace_add("write", lambda *_: self._schedule_save_prefs())
+        self.mirror_var.trace_add("write",    lambda *_: self._schedule_save_prefs())
+        self._rotation_var.trace_add("write", lambda *_: self._schedule_save_prefs())
+        self.width_var.trace_add("write",     lambda *_: self._schedule_save_prefs())
+        self.height_var.trace_add("write",    lambda *_: self._schedule_save_prefs())
+        self.fps_var.trace_add("write",       lambda *_: self._schedule_save_prefs())
+        self.preset_var.trace_add("write",    lambda *_: self._schedule_save_prefs())
+
         self._bind_keys()
         self._setup_dnd()
         self._center_window()
@@ -229,7 +242,14 @@ class App(_AppBase):
         except Exception:
             return {}
 
+    def _schedule_save_prefs(self):
+        """Cancela el guardado pendiente y programa uno nuevo tras 2 segundos (debounce)."""
+        if self._save_after_id is not None:
+            self.after_cancel(self._save_after_id)
+        self._save_after_id = self.after(2000, self._save_prefs)
+
     def _save_prefs(self):
+        self._save_after_id = None
         prefs = {
             "lang":       self._lang,
             "theme":      self._theme_name,
@@ -317,12 +337,14 @@ class App(_AppBase):
             "es"
         )
         self._apply_lang()
+        self._schedule_save_prefs()
 
     def _on_theme_change(self, _=None):
         display_to_key = {"Dark": "dark", "Blue": "blue", "White": "white", "Halloween": "halloween"}
         name = display_to_key.get(self._theme_var.get(), "dark")
         if name != self._theme_name:
             self._apply_theme(name)
+            self._schedule_save_prefs()
 
     def _apply_theme(self, name: str):
         """Aplica el tema indicado recoloreando todos los widgets activos y actualizando

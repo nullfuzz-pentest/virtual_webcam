@@ -1,8 +1,8 @@
-# Virtual Webcam Emulator v1.2
+# Virtual Webcam Emulator v1.3
 
 Emula una webcam virtual usando imágenes, videos o captura de pantalla como fuente, con interfaz gráfica en tiempo real.
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.2-purple)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.3-purple)
 
 ---
 
@@ -10,8 +10,10 @@ Emula una webcam virtual usando imágenes, videos o captura de pantalla como fue
 
 - Soporte para imágenes (JPG, PNG, BMP, WEBP, TIFF), videos (MP4, AVI, MOV, MKV, WEBM, FLV, WMV) y GIFs animados
 - Captura de pantalla en tiempo real con selección de monitor y cursor visible opcional
+- **Selección de región de captura** — selecciona un área específica de la pantalla arrastrando
 - Preview en vivo con control de FPS
 - Filtros de imagen: zoom digital, brillo, contraste, saturación y desenfoque
+- **Zoom direccional** — el punto de zoom sigue la posición del mouse sobre el preview
 - Overlay de texto e imagen PNG con posicionamiento libre y arrastre con el mouse
 - Espejo horizontal (flip)
 - Modo Crop (relleno) y Letterbox (barras negras)
@@ -21,6 +23,7 @@ Emula una webcam virtual usando imágenes, videos o captura de pantalla como fue
 - Interfaz multiidioma: Español, English, Português, 中文
 - Temas de interfaz: Dark, Blue, White
 - Detección automática del idioma del sistema
+- **Preferencias persistentes** — resolución, tema e idioma se guardan entre sesiones
 - LED de estado: cámara activa / solo preview / error
 
 ---
@@ -86,13 +89,20 @@ image_utils.py      — procesamiento de frames (fit, zoom, filtros, GIF, conver
 overlay.py          — overlay de texto e imagen PNG
 stream_thread.py    — hilo de captura y emisión de frames
 app.py              — ventana principal (GUI Tkinter)
+prefs.json          — preferencias guardadas (generado automáticamente)
 ```
 
 ---
 
 ## Changelog
 
-### v1.2 (latest)
+### v1.3 (latest)
+
+- Selección de región de captura de pantalla mediante drag interactivo
+- Zoom direccional: el punto de zoom sigue el cursor sobre el preview; vuelve al centro al salir
+- Preferencias persistentes: resolución, tema e idioma se guardan en `prefs.json` y se restauran al iniciar
+
+### v1.2
 
 - Soporte de GIFs animados con temporización por frame
 - Zoom digital (1×–5×) con slider y atajos de teclado `+` / `-`

@@ -36,7 +36,7 @@ def open_about(app) -> None:
     hdr.pack(fill="x")
     tk.Label(hdr, text="Virtual Webcam", font=("Segoe UI", 18, "bold"),
              bg=ACCENT, fg="#ffffff").pack()
-    tk.Label(hdr, text=f"v1.3  ·  {app.t('title_sub')}", font=("Segoe UI", 11),
+    tk.Label(hdr, text=f"v1.4  ·  {app.t('title_sub')}", font=("Segoe UI", 11),
              bg=ACCENT, fg="#dde").pack()
 
     body = tk.Frame(win, bg=BG, padx=28, pady=20)

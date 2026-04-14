@@ -21,9 +21,11 @@ Emula una webcam virtual usando imágenes, videos o captura de pantalla como fue
 - Drag & drop de archivos (requiere `tkinterdnd2`)
 - Clic en el área de preview para abrir el selector de archivos cuando no hay fuente cargada
 - Interfaz multiidioma: Español, English, Português, 中文
-- Temas de interfaz: Dark, Blue, White
+- **Rotación** — 0° / 90° / 180° / 270° aplicable en tiempo real
+- Temas de interfaz: Dark, Blue, White, **Halloween** 🎃
 - Detección automática del idioma del sistema
-- **Preferencias persistentes** — resolución, tema e idioma se guardan entre sesiones
+- **Preferencias persistentes** — resolución, tema, idioma, filtros, zoom, rotación y espejo se guardan entre sesiones
+- Tooltips en botones mostrados en la barra de estado al pasar el cursor
 - LED de estado: cámara activa / solo preview / error
 
 ---
@@ -89,6 +91,9 @@ image_utils.py      — procesamiento de frames (fit, zoom, filtros, GIF, conver
 overlay.py          — overlay de texto e imagen PNG
 stream_thread.py    — hilo de captura y emisión de frames
 app.py              — ventana principal (GUI Tkinter)
+ui_filters.py       — ventana de filtros (brillo, contraste, saturación, blur)
+ui_overlay.py       — ventana de overlay (texto + imagen PNG)
+ui_about.py         — diálogo "Acerca de"
 prefs.json          — preferencias guardadas (generado automáticamente)
 ```
 
@@ -96,7 +101,18 @@ prefs.json          — preferencias guardadas (generado automáticamente)
 
 ## Changelog
 
-### v1.3 (latest)
+### v1.4 (latest)
+
+- **Partición en módulos**: `ui_filters.py`, `ui_overlay.py`, `ui_about.py` — `app.py` reducido a ventana principal + coordinación
+- **Rotación en tiempo real**: 0° / 90° / 180° / 270° con combobox en la UI principal
+- **Tema Halloween**: paleta naranja/morada con decoración 🎃 👻 💀 en la barra de título
+- **Tooltips en barra de estado**: descripción de cada botón al pasar el cursor
+- **Preferencias extendidas**: filtros (brillo, contraste, saturación, blur), zoom, rotación y espejo ahora persisten en `prefs.json`
+- Throttle del preview movido al hilo de stream para reducir carga en la UI
+- Barra de zoom integrada en la UI principal (junto al botón de recorte)
+- Eliminado el icono por defecto de la barra de título (Windows)
+
+### v1.3
 
 - Selección de región de captura de pantalla mediante drag interactivo
 - Zoom direccional: el punto de zoom sigue el cursor sobre el preview; vuelve al centro al salir

@@ -776,7 +776,7 @@ class App(_AppBase):
         h  = self.winfo_height()
         sw = self.winfo_screenwidth()
         sh = self.winfo_screenheight()
-        self.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
+        self.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
 
     def _apply_preset(self, _=None):
         sel = self.preset_var.get()

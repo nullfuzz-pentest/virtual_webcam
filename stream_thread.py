@@ -35,7 +35,7 @@ class StreamThread(threading.Thread):
                  on_frame, on_status, on_stopped, cam_kwargs: dict,
                  msg_cam_active: str, msg_preview_only: str,
                  monitor_idx: int = 0, mirror: bool = False,
-                 on_cam_state=None):
+                 on_cam_state=None, screen_region: "dict | None" = None):
         super().__init__(daemon=True)
         self.source           = source
         self.source_type      = source_type
@@ -53,6 +53,7 @@ class StreamThread(threading.Thread):
         self.monitor_idx      = monitor_idx
         self.mirror           = mirror
         self.on_cam_state     = on_cam_state
+        self.screen_region    = screen_region  # {"left","top","width","height"} o None
 
         # cursor (capturas de pantalla)
         self.show_cursor: bool = True
@@ -63,6 +64,8 @@ class StreamThread(threading.Thread):
         self.filter_saturation: float = 1.0    #  0.0 .. 2.0
         self.filter_blur:       int   = 0      #    0 .. 10
         self.zoom:              float = 1.0    #  1.0 .. 5.0 (zoom digital)
+        self.zoom_cx:           float = 0.5    #  0.0 .. 1.0 (anchor horizontal)
+        self.zoom_cy:           float = 0.5    #  0.0 .. 1.0 (anchor vertical)
 
         # overlay (referencia al objeto del App, modificable desde la UI)
         self.overlay: OverlayConfig = OverlayConfig()
@@ -190,7 +193,7 @@ class StreamThread(threading.Thread):
     def _process(self, frame_bgr: np.ndarray) -> np.ndarray:
         """Aplica zoom → flip → filtros → overlay y devuelve frame RGB listo para enviar."""
         if self.zoom > 1.0:
-            frame_bgr = apply_zoom(frame_bgr, self.zoom)
+            frame_bgr = apply_zoom(frame_bgr, self.zoom, self.zoom_cx, self.zoom_cy)
         if self.mirror:
             frame_bgr = cv2.flip(frame_bgr, 1)
         frame_bgr = apply_filters(frame_bgr, self.filter_brightness,
@@ -221,18 +224,20 @@ class StreamThread(threading.Thread):
                 monitors = sct.monitors   # [0]=all combined, [1+]=individual
                 idx = min(self.monitor_idx, len(monitors) - 1)
                 monitor = monitors[idx]
+                # región personalizada toma precedencia sobre el monitor completo
+                grab_target = self.screen_region if self.screen_region else monitor
                 while not self._stop.is_set():
                     self._pause.wait()
                     if self._stop.is_set():
                         break
-                    raw = sct.grab(monitor)
+                    raw = sct.grab(grab_target)
                     frame_bgra = np.array(raw)
                     frame_bgr  = cv2.cvtColor(frame_bgra, cv2.COLOR_BGRA2BGR)
                     if self.show_cursor:
                         pos = self._get_cursor_pos()
                         if pos:
-                            cx = pos[0] - monitor["left"]
-                            cy = pos[1] - monitor["top"]
+                            cx = pos[0] - grab_target["left"]
+                            cy = pos[1] - grab_target["top"]
                             frame_bgr = self._draw_cursor(frame_bgr, cx, cy)
                     frame_bgr  = fit_frame(frame_bgr, self.cam_width, self.cam_height, self.cover)
                     frame_rgb  = self._process(frame_bgr)
@@ -253,13 +258,22 @@ class StreamThread(threading.Thread):
                 self._pause.wait()
                 if self._stop.is_set():
                     break
-                screenshot = ImageGrab.grab()
+                if self.screen_region:
+                    r = self.screen_region
+                    bbox = (r["left"], r["top"],
+                            r["left"] + r["width"], r["top"] + r["height"])
+                    screenshot = ImageGrab.grab(bbox=bbox)
+                    off_x, off_y = r["left"], r["top"]
+                else:
+                    screenshot = ImageGrab.grab()
+                    off_x, off_y = 0, 0
                 frame_pil  = np.array(screenshot)                   # RGB
                 frame_bgr  = cv2.cvtColor(frame_pil, cv2.COLOR_RGB2BGR)
                 if self.show_cursor:
                     pos = self._get_cursor_pos()
                     if pos:
-                        frame_bgr = self._draw_cursor(frame_bgr, pos[0], pos[1])
+                        frame_bgr = self._draw_cursor(frame_bgr,
+                                                      pos[0] - off_x, pos[1] - off_y)
                 frame_bgr  = fit_frame(frame_bgr, self.cam_width, self.cam_height, self.cover)
                 frame_rgb  = self._process(frame_bgr)
                 if cam:

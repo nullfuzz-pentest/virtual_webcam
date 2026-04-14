@@ -69,18 +69,24 @@ def fit_frame(frame: np.ndarray, width: int, height: int, cover: bool = True) ->
         return canvas
 
 
-def apply_zoom(frame: np.ndarray, zoom: float) -> np.ndarray:
-    """Aplica zoom digital recortando el centro del frame y reescalando a la resolución original.
+def apply_zoom(frame: np.ndarray, zoom: float,
+               cx_frac: float = 0.5, cy_frac: float = 0.5) -> np.ndarray:
+    """Aplica zoom digital recortando el frame alrededor del punto (cx_frac, cy_frac)
+    (normalizado 0–1) y reescalando a la resolución original.
 
-    zoom=1.0 → sin cambio; zoom=2.0 → amplía 2× el centro; zoom=5.0 → máximo.
+    zoom=1.0 → sin cambio; zoom=2.0 → amplía 2× el punto indicado; zoom=5.0 → máximo.
+    cx_frac/cy_frac=0.5 → zoom centrado (comportamiento anterior).
     """
     if zoom <= 1.0:
         return frame
     h, w = frame.shape[:2]
     new_h = max(1, int(h / zoom))
     new_w = max(1, int(w / zoom))
-    y0 = (h - new_h) // 2
-    x0 = (w - new_w) // 2
+    # Centro del recorte según el anchor, clampeado para no salir del frame
+    cx = int(cx_frac * w)
+    cy = int(cy_frac * h)
+    x0 = max(0, min(w - new_w, cx - new_w // 2))
+    y0 = max(0, min(h - new_h, cy - new_h // 2))
     cropped = frame[y0 : y0 + new_h, x0 : x0 + new_w]
     return cv2.resize(cropped, (w, h), interpolation=cv2.INTER_LINEAR)
 

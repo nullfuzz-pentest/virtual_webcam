@@ -20,6 +20,11 @@ ENV/
 .idea/
 *.sublime-project
 *.sublime-workspace
+#claude code
+.claude
+
+#cache settings
+prefs.json
 
 # OS
 .DS_Store

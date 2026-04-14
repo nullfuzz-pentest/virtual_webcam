@@ -6,6 +6,7 @@ Clase App: ventana principal de la aplicación (GUI Tkinter).
 
 import time
 import locale
+import json
 import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -29,6 +30,94 @@ from image_utils import detect_source_type, fit_frame, bgr_to_rgb
 from overlay import OverlayConfig, get_overlay_rects
 from stream_thread import StreamThread
 
+_PREFS_PATH = Path(__file__).parent / "prefs.json"
+
+
+class _RegionPicker:
+    """Ventana fullscreen para seleccionar una región de pantalla arrastrando."""
+
+    def __init__(self, parent: tk.Tk, monitor: dict, hint: str):
+        self.result: "dict | None" = None
+        ox = monitor["left"]
+        oy = monitor["top"]
+        sw = monitor["width"]
+        sh = monitor["height"]
+        self._ox = ox
+        self._oy = oy
+        self._x0 = self._y0 = 0
+
+        # captura el fondo del monitor
+        try:
+            import mss as _mss
+            with _mss.mss() as sct:
+                raw = sct.grab(monitor)
+                bg_img = Image.frombytes("RGB", (sw, sh), bytes(raw.rgb))
+        except Exception:
+            try:
+                from PIL import ImageGrab
+                bg_img = ImageGrab.grab(bbox=(ox, oy, ox + sw, oy + sh))
+            except Exception:
+                bg_img = Image.new("RGB", (sw, sh), "#1e1e2e")
+
+        self._win = tk.Toplevel(parent)
+        self._win.overrideredirect(True)
+        self._win.geometry(f"{sw}x{sh}+{ox}+{oy}")
+        self._win.attributes("-topmost", True)
+        self._win.lift()
+        self._win.focus_force()
+
+        self._bg_photo = ImageTk.PhotoImage(bg_img)
+
+        self._canvas = tk.Canvas(self._win, cursor="crosshair",
+                                  highlightthickness=0, bd=0)
+        self._canvas.pack(fill="both", expand=True)
+
+        # fondo + overlay semitransparente
+        self._canvas.create_image(0, 0, anchor="nw", image=self._bg_photo)
+        self._canvas.create_rectangle(0, 0, sw, sh,
+                                       fill="black", stipple="gray50", outline="")
+        # rectángulo de selección
+        self._rect = self._canvas.create_rectangle(0, 0, 1, 1,
+                                                    outline="#00ff00", width=2, fill="")
+        # etiqueta de dimensiones
+        self._size_lbl = self._canvas.create_text(sw // 2, sh - 24, text="",
+                                                   fill="white",
+                                                   font=("Segoe UI", 11, "bold"))
+        # instrucciones
+        self._canvas.create_text(sw // 2, 22, text=hint,
+                                  fill="white", font=("Segoe UI", 11, "bold"))
+
+        self._canvas.bind("<ButtonPress-1>",   self._on_press)
+        self._canvas.bind("<B1-Motion>",       self._on_drag)
+        self._canvas.bind("<ButtonRelease-1>", self._on_release)
+        self._win.bind("<Escape>",             self._on_cancel)
+
+        self._win.grab_set()
+        parent.wait_window(self._win)
+
+    def _on_press(self, e: tk.Event):
+        self._x0, self._y0 = e.x, e.y
+        self._canvas.coords(self._rect, e.x, e.y, e.x, e.y)
+
+    def _on_drag(self, e: tk.Event):
+        x1, y1 = min(self._x0, e.x), min(self._y0, e.y)
+        x2, y2 = max(self._x0, e.x), max(self._y0, e.y)
+        self._canvas.coords(self._rect, x1, y1, x2, y2)
+        self._canvas.itemconfig(self._size_lbl, text=f"{x2 - x1} × {y2 - y1}")
+
+    def _on_release(self, e: tk.Event):
+        x1 = min(self._x0, e.x) + self._ox
+        y1 = min(self._y0, e.y) + self._oy
+        x2 = max(self._x0, e.x) + self._ox
+        y2 = max(self._y0, e.y) + self._oy
+        w, h = x2 - x1, y2 - y1
+        if w > 10 and h > 10:
+            self.result = {"left": x1, "top": y1, "width": w, "height": h}
+        self._win.destroy()
+
+    def _on_cancel(self, _=None):
+        self._win.destroy()
+
 
 class App(_AppBase):
     def __init__(self):
@@ -37,8 +126,9 @@ class App(_AppBase):
         self.configure(bg=BG)
         self.resizable(False, False)
 
-        self._lang           = self._detect_lang()   # idioma activo
-        self._theme_name     = "dark"                # tema activo
+        _prefs               = self._load_prefs()
+        self._lang           = _prefs.get("lang", self._detect_lang())
+        self._theme_name     = _prefs.get("theme", "dark")
         self._thread: StreamThread | None = None
         self._last_photo     = None
         self._seek_dragging  = False
@@ -46,6 +136,7 @@ class App(_AppBase):
         self._file_loaded    = False
         self._use_screen     = False
         self._screen_monitor_idx = 0
+        self._screen_region: "dict | None" = None
         self.mirror_var      = tk.BooleanVar(value=False)
         self._thumb_photo    = None
         # filtros — DoubleVars sincronizadas con el hilo
@@ -54,6 +145,9 @@ class App(_AppBase):
         self._sat_var  = tk.DoubleVar(value=1.0)
         self._blur_var = tk.DoubleVar(value=0.0)
         self._zoom_var = tk.DoubleVar(value=1.0)
+        # anchor del zoom (coordenadas normalizadas del puntero sobre el canvas)
+        self._zoom_cx: float = 0.5
+        self._zoom_cy: float = 0.5
         # overlay compartido con el thread
         self._overlay      = OverlayConfig()
         self._filter_win   = None
@@ -66,6 +160,21 @@ class App(_AppBase):
         self._drag_frame_offset: tuple = (0.0, 0.0)
 
         self._build_ui()
+        # aplicar preferencias guardadas que requieren widgets ya creados
+        if _prefs:
+            if self._theme_name != "dark":
+                self._apply_theme(self._theme_name)
+            preset = _prefs.get("preset", "")
+            if preset in _PRESET_NUMERIC_KEYS:
+                self.preset_var.set(preset)
+                self._apply_preset()
+            if _prefs.get("preset") not in _PRESET_NUMERIC_KEYS:
+                if "width" in _prefs:
+                    self.width_var.set(_prefs["width"])
+                if "height" in _prefs:
+                    self.height_var.set(_prefs["height"])
+            if "fps" in _prefs:
+                self.fps_var.set(_prefs["fps"])
         self._bind_keys()
         self._setup_dnd()
         self._center_window()
@@ -86,6 +195,30 @@ class App(_AppBase):
         except Exception:
             return "es"
 
+    # ------------------------------------------------------------------
+    # Preferencias persistentes
+    # ------------------------------------------------------------------
+
+    def _load_prefs(self) -> dict:
+        try:
+            return json.loads(_PREFS_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
+    def _save_prefs(self):
+        prefs = {
+            "lang":   self._lang,
+            "theme":  self._theme_name,
+            "preset": self.preset_var.get(),
+            "width":  self.width_var.get(),
+            "height": self.height_var.get(),
+            "fps":    self.fps_var.get(),
+        }
+        try:
+            _PREFS_PATH.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
     def t(self, key: str, **kwargs) -> str:
         """Devuelve la cadena traducida al idioma activo."""
         text = TRANSLATIONS[self._lang].get(key, key)
@@ -101,6 +234,8 @@ class App(_AppBase):
         self.btn_screen.config(text=self.t("btn_screen"))
         self._lbl_monitor.config(text=self.t("lbl_monitor"))
         self._chk_cursor.config(text=self.t("chk_cursor"))
+        key = "btn_clear_region" if self._screen_region else "btn_pick_region"
+        self._btn_pick_region.config(text=self.t(key))
         self._refresh_monitor_list()
         if not self._file_loaded:
             self.source_var.set(self.t("no_file_selected"))
@@ -276,6 +411,8 @@ class App(_AppBase):
         self.canvas.bind("<Button-1>",        self._on_canvas_press)
         self.canvas.bind("<B1-Motion>",       self._on_canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_canvas_release)
+        self.canvas.bind("<Motion>",          self._on_canvas_motion)
+        self.canvas.bind("<Leave>",           self._on_canvas_leave)
         self._draw_placeholder()
 
         # ── barra de progreso (video)
@@ -344,6 +481,12 @@ class App(_AppBase):
             selectcolor=BG_BTN, cursor="hand2",
         )
         self._chk_cursor.pack(side="left", padx=(12, 0))
+        self._btn_pick_region = self._btn(
+            row1c, self.t("btn_pick_region"), self._pick_screen_region,
+            color=BG_BTN, fg=FG,
+        )
+        self._btn_pick_region.pack(side="left", padx=(8, 0))
+        self._btn_pick_region.config(state="disabled")
 
         # fila 2: preset de aspecto
         row2a = tk.Frame(ctrl, bg=BG_PANEL)
@@ -632,7 +775,27 @@ class App(_AppBase):
 
     def _sync_zoom(self, *_):
         if self._thread and self._thread.is_alive():
-            self._thread.zoom = self._zoom_var.get()
+            self._thread.zoom    = self._zoom_var.get()
+            self._thread.zoom_cx = self._zoom_cx
+            self._thread.zoom_cy = self._zoom_cy
+
+    def _on_canvas_motion(self, event):
+        """Actualiza el anchor de zoom según la posición del puntero sobre el canvas."""
+        pw = self.canvas.winfo_width()  or self.preview_w
+        ph = self.canvas.winfo_height() or self.preview_h
+        self._zoom_cx = max(0.0, min(1.0, event.x / pw))
+        self._zoom_cy = max(0.0, min(1.0, event.y / ph))
+        if self._thread and self._thread.is_alive():
+            self._thread.zoom_cx = self._zoom_cx
+            self._thread.zoom_cy = self._zoom_cy
+
+    def _on_canvas_leave(self, _event=None):
+        """Cuando el puntero sale del canvas, el anchor vuelve al centro."""
+        self._zoom_cx = 0.5
+        self._zoom_cy = 0.5
+        if self._thread and self._thread.is_alive():
+            self._thread.zoom_cx = 0.5
+            self._thread.zoom_cy = 0.5
 
     # ------------------------------------------------------------------
     # Cursor de pantalla
@@ -1057,6 +1220,8 @@ class App(_AppBase):
         values = self._monitor_cb["values"]
         idx = list(values).index(sel) if sel in values else 0
         self._screen_monitor_idx = idx
+        self._screen_region = None
+        self._btn_pick_region.config(text=self.t("btn_pick_region"))
         if self._use_screen:
             if idx == 0:
                 self.source_var.set(self.t("screen_label_all"))
@@ -1067,15 +1232,50 @@ class App(_AppBase):
         """Activa el modo captura de pantalla."""
         self._use_screen = True
         self._file_loaded = True
+        self._screen_region = None
         self._refresh_monitor_list()
         self._monitor_cb.config(state="readonly")
         self._monitor_var.set(self._monitor_cb["values"][0])
         self._screen_monitor_idx = 0
+        self._btn_pick_region.config(state="normal", text=self.t("btn_pick_region"))
         self.source_var.set(self.t("screen_label_all"))
         self.info_var.set("")
         self._update_thumbnail(None)
         self._set_status(self.t("status_screen"))
         self._draw_placeholder()
+
+    def _pick_screen_region(self):
+        """Abre el selector de región si ya hay una región, la limpia; si no, abre el picker."""
+        if self._screen_region:
+            # segunda pulsación: limpiar región
+            self._screen_region = None
+            self._btn_pick_region.config(text=self.t("btn_pick_region"))
+            idx = self._screen_monitor_idx
+            if idx == 0:
+                self.source_var.set(self.t("screen_label_all"))
+            else:
+                self.source_var.set(self.t("screen_label", n=idx))
+            return
+
+        if not MSS_AVAILABLE:
+            return
+        try:
+            import mss as _mss
+            with _mss.mss() as sct:
+                monitors = sct.monitors
+                idx = max(1, min(self._screen_monitor_idx, len(monitors) - 1))
+                mon = monitors[idx]
+        except Exception:
+            return
+
+        picker = _RegionPicker(self, mon, self.t("region_picker_hint"))
+        if picker.result:
+            self._screen_region = picker.result
+            r = picker.result
+            self.source_var.set(self.t("region_label",
+                                        w=r["width"], h=r["height"],
+                                        x=r["left"], y=r["top"]))
+            self._btn_pick_region.config(text=self.t("btn_clear_region"))
 
     # ------------------------------------------------------------------
     # Metadatos del archivo fuente
@@ -1234,12 +1434,15 @@ class App(_AppBase):
             monitor_idx=self._screen_monitor_idx,
             mirror=self.mirror_var.get(),
             on_cam_state=self._on_cam_state,
+            screen_region=self._screen_region,
         )
         self._thread.filter_brightness = self._bri_var.get()
         self._thread.filter_contrast   = self._con_var.get()
         self._thread.filter_saturation = self._sat_var.get()
         self._thread.filter_blur       = int(self._blur_var.get())
         self._thread.zoom              = self._zoom_var.get()
+        self._thread.zoom_cx           = self._zoom_cx
+        self._thread.zoom_cy           = self._zoom_cy
         self._thread.overlay           = self._overlay
         self._thread.show_cursor       = self._show_cursor_var.get()
         self._set_led("active")
@@ -1372,4 +1575,5 @@ class App(_AppBase):
         self._stop()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.5)
+        self._save_prefs()
         self.destroy()

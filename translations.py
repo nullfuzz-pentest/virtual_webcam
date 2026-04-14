@@ -107,6 +107,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status_screen"      : "Capturando pantalla…",
         "err_screen_title"   : "Sin captura de pantalla",
         "err_screen_msg"     : "Instala mss para capturar pantalla:\n  pip install mss",
+        "btn_pick_region"    : "✂ Región",
+        "btn_clear_region"   : "✕ Región",
+        "region_picker_hint" : "Arrastra para seleccionar región  •  ESC para cancelar",
+        "region_label"       : "Pantalla — Región {w}×{h} en ({x}, {y})",
     },
     "en": {
         "lang_display"       : "English",
@@ -198,6 +202,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status_screen"      : "Capturing screen…",
         "err_screen_title"   : "No screen capture",
         "err_screen_msg"     : "Install mss to capture the screen:\n  pip install mss",
+        "btn_pick_region"    : "✂ Region",
+        "btn_clear_region"   : "✕ Region",
+        "region_picker_hint" : "Drag to select region  •  ESC to cancel",
+        "region_label"       : "Screen — Region {w}×{h} at ({x}, {y})",
     },
     "pt": {
         "lang_display"       : "Português",
@@ -289,6 +297,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status_screen"      : "Capturando tela…",
         "err_screen_title"   : "Sem captura de tela",
         "err_screen_msg"     : "Instale mss para capturar a tela:\n  pip install mss",
+        "btn_pick_region"    : "✂ Região",
+        "btn_clear_region"   : "✕ Região",
+        "region_picker_hint" : "Arraste para selecionar região  •  ESC para cancelar",
+        "region_label"       : "Tela — Região {w}×{h} em ({x}, {y})",
     },
     "zh": {
         "lang_display"       : "中文",
@@ -380,6 +392,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status_screen"      : "正在录制屏幕…",
         "err_screen_title"   : "无法捕获屏幕",
         "err_screen_msg"     : "请安装 mss 以捕获屏幕：\n  pip install mss",
+        "btn_pick_region"    : "✂ 选区",
+        "btn_clear_region"   : "✕ 选区",
+        "region_picker_hint" : "拖动选择区域  •  ESC 取消",
+        "region_label"       : "屏幕 — 区域 {w}×{h} 位于 ({x}, {y})",
     },
 }
 

@@ -123,6 +123,17 @@ THEMES: dict[str, dict[str, str]] = {
         "RED":       "#c83030",
         "STATUS_BG": "#e0e0ec",
     },
+    "halloween": {
+        "BG":        "#1a0a00",
+        "BG_PANEL":  "#2b1200",
+        "BG_BTN":    "#4a2000",
+        "ACCENT":    "#ff6a00",
+        "ACCENT2":   "#b843e0",
+        "FG":        "#ffd580",
+        "FG_DIM":    "#a06030",
+        "RED":       "#ff3030",
+        "STATUS_BG": "#0f0500",
+    },
 }
 
-THEME_KEYS = list(THEMES.keys())   # ["dark", "blue", "white"]
+THEME_KEYS = list(THEMES.keys())   # ["dark", "blue", "white", "halloween"]

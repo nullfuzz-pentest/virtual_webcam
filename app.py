@@ -4,10 +4,8 @@ app.py
 Clase App: ventana principal de la aplicación (GUI Tkinter).
 """
 
-import time
 import locale
 import json
-import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox
 import tkinter as tk
@@ -29,6 +27,9 @@ from translations import TRANSLATIONS, LANG_ORDER
 from image_utils import detect_source_type, fit_frame, bgr_to_rgb
 from overlay import OverlayConfig, get_overlay_rects
 from stream_thread import StreamThread
+from ui_filters  import open_filter_window
+from ui_overlay  import open_overlay_window
+from ui_about    import open_about
 
 _PREFS_PATH = Path(__file__).parent / "prefs.json"
 
@@ -122,22 +123,24 @@ class _RegionPicker:
 class App(_AppBase):
     def __init__(self):
         super().__init__()
-        self.title("Virtual Webcam v1.2")
+        self.title("Virtual Webcam v1.3")
         self.configure(bg=BG)
         self.resizable(False, False)
+        self.after(0, self._remove_titlebar_icon)
 
         _prefs               = self._load_prefs()
         self._lang           = _prefs.get("lang", self._detect_lang())
-        self._theme_name     = _prefs.get("theme", "dark")
+        _saved_theme         = _prefs.get("theme", "dark")
+        self._theme_name     = "dark"   # _build_ui usa colores dark del módulo; se corrige abajo
         self._thread: StreamThread | None = None
         self._last_photo     = None
         self._seek_dragging  = False
-        self._last_preview_time = 0.0
         self._file_loaded    = False
         self._use_screen     = False
         self._screen_monitor_idx = 0
         self._screen_region: "dict | None" = None
         self.mirror_var      = tk.BooleanVar(value=False)
+        self._rotation_var   = tk.IntVar(value=0)
         self._thumb_photo    = None
         # filtros — DoubleVars sincronizadas con el hilo
         self._bri_var  = tk.DoubleVar(value=0.0)
@@ -162,8 +165,10 @@ class App(_AppBase):
         self._build_ui()
         # aplicar preferencias guardadas que requieren widgets ya creados
         if _prefs:
-            if self._theme_name != "dark":
-                self._apply_theme(self._theme_name)
+            if _saved_theme != "dark":
+                self._apply_theme(_saved_theme)
+                _td = {"dark": "Dark", "blue": "Blue", "white": "White", "halloween": "Halloween"}
+                self._theme_var.set(_td.get(_saved_theme, "Dark"))
             preset = _prefs.get("preset", "")
             if preset in _PRESET_NUMERIC_KEYS:
                 self.preset_var.set(preset)
@@ -175,6 +180,25 @@ class App(_AppBase):
                     self.height_var.set(_prefs["height"])
             if "fps" in _prefs:
                 self.fps_var.set(_prefs["fps"])
+            # filtros y transforms
+            if "brightness" in _prefs:
+                self._bri_var.set(float(_prefs["brightness"]))
+            if "contrast" in _prefs:
+                self._con_var.set(float(_prefs["contrast"]))
+            if "saturation" in _prefs:
+                self._sat_var.set(float(_prefs["saturation"]))
+            if "blur" in _prefs:
+                self._blur_var.set(float(_prefs["blur"]))
+            if "zoom" in _prefs:
+                v = float(_prefs["zoom"])
+                self._zoom_var.set(v)
+                self._zoom_val_lbl.config(text=f"{v:.1f}×")
+            if "rotation" in _prefs:
+                deg = int(_prefs["rotation"])
+                self._rotation_var.set(deg)
+                self._rotation_cb.current(deg // 90)
+            if "mirror" in _prefs:
+                self.mirror_var.set(bool(_prefs["mirror"]))
         self._bind_keys()
         self._setup_dnd()
         self._center_window()
@@ -207,12 +231,19 @@ class App(_AppBase):
 
     def _save_prefs(self):
         prefs = {
-            "lang":   self._lang,
-            "theme":  self._theme_name,
-            "preset": self.preset_var.get(),
-            "width":  self.width_var.get(),
-            "height": self.height_var.get(),
-            "fps":    self.fps_var.get(),
+            "lang":       self._lang,
+            "theme":      self._theme_name,
+            "preset":     self.preset_var.get(),
+            "width":      self.width_var.get(),
+            "height":     self.height_var.get(),
+            "fps":        self.fps_var.get(),
+            "brightness": self._bri_var.get(),
+            "contrast":   self._con_var.get(),
+            "saturation": self._sat_var.get(),
+            "blur":       self._blur_var.get(),
+            "zoom":       self._zoom_var.get(),
+            "rotation":   self._rotation_var.get(),
+            "mirror":     self.mirror_var.get(),
         }
         try:
             _PREFS_PATH.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
@@ -257,6 +288,8 @@ class App(_AppBase):
         self._lbl_backend.config(text=self.t("lbl_backend"))
         self._chk_loop.config(text=self.t("lbl_loop"))
         self._chk_mirror.config(text=self.t("lbl_mirror"))
+        self._lbl_rotation.config(text=self.t("lbl_rotation"))
+        self._lbl_zoom_main.config(text=self.t("lbl_zoom"))
         if self.cover_var.get():
             self.btn_fit.config(text=self.t("btn_crop"))
         else:
@@ -286,7 +319,7 @@ class App(_AppBase):
         self._apply_lang()
 
     def _on_theme_change(self, _=None):
-        display_to_key = {"Dark": "dark", "Blue": "blue", "White": "white"}
+        display_to_key = {"Dark": "dark", "Blue": "blue", "White": "white", "Halloween": "halloween"}
         name = display_to_key.get(self._theme_var.get(), "dark")
         if name != self._theme_name:
             self._apply_theme(name)
@@ -332,6 +365,15 @@ class App(_AppBase):
 
         self._theme_name = name
 
+        # decoración halloween
+        if name == "halloween":
+            self._lbl_halloween.config(bg=theme["BG"])
+            self._lbl_halloween.pack(side="left", padx=(6, 0))
+            self.title("🎃 Virtual Webcam 💀")
+        else:
+            self._lbl_halloween.pack_forget()
+            self.title("Virtual Webcam v1.3")
+
     @staticmethod
     def _recolor_widget(w, old_new: dict):
         """Actualiza los colores de un widget según el mapa {hex_viejo: hex_nuevo}."""
@@ -353,6 +395,15 @@ class App(_AppBase):
                 pass
 
     # ------------------------------------------------------------------
+    # Tooltips
+    # ------------------------------------------------------------------
+
+    def _bind_tooltip(self, widget, key: str):
+        """Muestra la traducción de `key` en el label de tooltip al entrar al widget."""
+        widget.bind("<Enter>", lambda _: self._tooltip_var.set(self.t(key)))
+        widget.bind("<Leave>", lambda _: self._tooltip_var.set(""))
+
+    # ------------------------------------------------------------------
     # Construcción de la UI
     # ------------------------------------------------------------------
 
@@ -366,6 +417,10 @@ class App(_AppBase):
         self._lbl_subtitle = tk.Label(title_bar, text=self.t("title_sub"),
                                       font=("Segoe UI", 16), bg=BG, fg=FG_DIM)
         self._lbl_subtitle.pack(side="left", padx=(4, 0))
+        # decoración halloween (oculta por defecto)
+        self._lbl_halloween = tk.Label(title_bar, text="  🎃 👻 💀",
+                                       font=("Segoe UI", 15), bg=BG, fg="#ff6a00")
+        # no se hace pack aquí; se muestra/oculta en _apply_theme
 
         lang_frame = tk.Frame(title_bar, bg=BG)
         lang_frame.pack(side="right")
@@ -381,11 +436,11 @@ class App(_AppBase):
         self._lbl_theme = tk.Label(lang_frame, text=self.t("lbl_theme"),
                                    font=("Segoe UI", 9), bg=BG, fg=FG_DIM)
         self._lbl_theme.pack(side="left", padx=(0, 4))
-        _theme_display = {"dark": "Dark", "blue": "Blue", "white": "White"}
+        _theme_display = {"dark": "Dark", "blue": "Blue", "white": "White", "halloween": "Halloween"}
         self._theme_var = tk.StringVar(value=_theme_display[self._theme_name])
         theme_cb = ttk.Combobox(
-            lang_frame, textvariable=self._theme_var, width=6, state="readonly",
-            values=["Dark", "Blue", "White"],
+            lang_frame, textvariable=self._theme_var, width=10, state="readonly",
+            values=["Dark", "Blue", "White", "Halloween"],
         )
         theme_cb.pack(side="left")
         theme_cb.bind("<<ComboboxSelected>>", self._on_theme_change)
@@ -541,6 +596,18 @@ class App(_AppBase):
         )
         self._chk_mirror.pack(side="left", padx=(0, 8))
 
+        self._lbl_rotation = tk.Label(row3, text=self.t("lbl_rotation"),
+                                      font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_DIM)
+        self._lbl_rotation.pack(side="left", padx=(8, 4))
+        self._rotation_cb = ttk.Combobox(
+            row3, textvariable=tk.StringVar(),
+            values=["0°", "90°", "180°", "270°"],
+            width=5, state="readonly",
+        )
+        self._rotation_cb.current(0)
+        self._rotation_cb.pack(side="left", padx=(0, 8))
+        self._rotation_cb.bind("<<ComboboxSelected>>", self._on_rotation_change)
+
         self.cover_var = tk.BooleanVar(value=True)
         self.btn_fit = tk.Button(
             row3, text=self.t("btn_crop"), command=self._toggle_fit,
@@ -549,6 +616,19 @@ class App(_AppBase):
             cursor="hand2", bd=0,
         )
         self.btn_fit.pack(side="left")
+
+        # zoom — inline en row3, a la derecha de recortar
+        self._lbl_zoom_main = tk.Label(row3, text=self.t("lbl_zoom"),
+                                       font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_DIM)
+        self._lbl_zoom_main.pack(side="left", padx=(12, 4))
+        self._zoom_val_lbl = tk.Label(row3, text="1.0×", width=4, anchor="e",
+                                      font=("Consolas", 9), bg=BG_PANEL, fg=ACCENT2)
+        self._zoom_val_lbl.pack(side="left")
+        ttk.Scale(row3, from_=1.0, to=5.0, orient="horizontal",
+                  variable=self._zoom_var, length=150,
+                  command=lambda v: self._zoom_val_lbl.config(text=f"{float(v):.1f}×")
+                  ).pack(side="left", padx=(4, 0))
+        self._zoom_var.trace_add("write", lambda *_: self._sync_zoom())
 
         # fila 5: controles de transporte — Play / Pause / Stop
         row4 = tk.Frame(ctrl, bg=BG_PANEL)
@@ -586,6 +666,13 @@ class App(_AppBase):
         tk.Label(status_bar, textvariable=self.info_var, font=("Consolas", 9),
                  bg=STATUS_BG, fg=ACCENT2, anchor="e").pack(side="right", padx=(0, 12))
 
+        # tooltip — se muestra al centro al pasar el cursor sobre un widget
+        self._tooltip_var = tk.StringVar(value="")
+        self._tooltip_lbl = tk.Label(status_bar, textvariable=self._tooltip_var,
+                                     font=("Segoe UI", 9, "italic"),
+                                     bg=STATUS_BG, fg=ACCENT, anchor="e")
+        self._tooltip_lbl.pack(side="right", padx=(0, 16))
+
         # ── estilos ttk
         style = ttk.Style(self)
         style.theme_use("clam")
@@ -596,6 +683,17 @@ class App(_AppBase):
                         arrowcolor=FG)
         self.option_add("*TCombobox*Listbox.background", BG_BTN)
         self.option_add("*TCombobox*Listbox.foreground", FG)
+
+        # ── tooltips en widgets
+        self._bind_tooltip(self.btn_open,          "tip_open")
+        self._bind_tooltip(self.btn_screen,        "tip_screen")
+        self._bind_tooltip(self._btn_pick_region,  "tip_pick_region")
+        self._bind_tooltip(self.btn_fit,           "tip_crop")
+        self._bind_tooltip(self._chk_mirror,       "tip_mirror")
+        self._bind_tooltip(self._lbl_rotation,     "tip_rotation")
+        self._bind_tooltip(self._rotation_cb,      "tip_rotation")
+        self._bind_tooltip(self.btn_filters_open,  "tip_filters")
+        self._bind_tooltip(self.btn_overlay_open,  "tip_overlay")
 
     def _param(self, label: str, parent, attr: str, default: str) -> tk.Label:
         """Crea un par Label+Entry y devuelve el Label para poder actualizarlo."""
@@ -764,6 +862,13 @@ class App(_AppBase):
         if self._thread and self._thread.is_alive():
             self._thread.mirror = new_val
 
+    def _on_rotation_change(self, _=None):
+        idx = self._rotation_cb.current()
+        degrees = idx * 90
+        self._rotation_var.set(degrees)
+        if self._thread and self._thread.is_alive():
+            self._thread.rotation = degrees
+
     # ------------------------------------------------------------------
     # Zoom digital
     # ------------------------------------------------------------------
@@ -774,8 +879,10 @@ class App(_AppBase):
         self._zoom_var.set(new_val)
 
     def _sync_zoom(self, *_):
+        v = self._zoom_var.get()
+        self._zoom_val_lbl.config(text=f"{v:.1f}×")
         if self._thread and self._thread.is_alive():
-            self._thread.zoom    = self._zoom_var.get()
+            self._thread.zoom    = v
             self._thread.zoom_cx = self._zoom_cx
             self._thread.zoom_cy = self._zoom_cy
 
@@ -859,343 +966,18 @@ class App(_AppBase):
     # Helpers de overlay
     # ------------------------------------------------------------------
 
-    def _build_pos_grid(self, parent, ov: OverlayConfig, attr: str):
-        """Crea una cuadrícula 3×3 de radiobuttons para elegir posición."""
-        POS_GRID = [
-            ["top-left",    "top-center",    "top-right"   ],
-            ["center",      "center",        "center"      ],
-            ["bottom-left", "bottom-center", "bottom-right"],
-        ]
-        LABELS = [
-            ["↖", "↑", "↗"],
-            ["",  "·", "" ],
-            ["↙", "↓", "↘"],
-        ]
-        var = tk.StringVar(value=getattr(ov, attr))
-        grid = tk.Frame(parent, bg=BG)
-        grid.pack(side="left", padx=(8, 0))
-        for ri, row in enumerate(POS_GRID):
-            for ci, pos in enumerate(row):
-                lbl = LABELS[ri][ci]
-                if not lbl:
-                    tk.Label(grid, width=3, bg=BG).grid(row=ri, column=ci)
-                    continue
-                xy_attr = "text_xy" if attr == "text_pos" else "img_xy"
-                rb = tk.Radiobutton(
-                    grid, text=lbl, value=pos, variable=var,
-                    command=lambda p=pos, a=attr, xa=xy_attr: (
-                        setattr(ov, a, p), setattr(ov, xa, None)),
-                    bg=BG, fg=FG, activebackground=BG, selectcolor=BG_BTN,
-                    font=("Segoe UI", 10), indicatoron=False,
-                    relief="flat", padx=4, pady=2, cursor="hand2",
-                )
-                rb.grid(row=ri, column=ci, padx=1, pady=1)
-
-    def _load_overlay_image(self, path: str):
-        """Carga y escala un PNG con canal alfa en `_overlay.img_bgra`."""
-        try:
-            img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-            if img is None:
-                return
-            if img.shape[2] == 3:
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
-            self._overlay.img_path = path
-            self._apply_overlay_scale(img)
-        except Exception:
-            pass
-
-    def _apply_overlay_scale(self, raw_bgra: np.ndarray):
-        s = self._overlay.img_scale
-        h, w = raw_bgra.shape[:2]
-        nw, nh = max(1, int(w * s)), max(1, int(h * s))
-        self._overlay.img_bgra = cv2.resize(raw_bgra, (nw, nh), interpolation=cv2.INTER_AREA)
-        self._overlay._raw_bgra = raw_bgra
-
-    def _reload_overlay_image(self):
-        raw = getattr(self._overlay, "_raw_bgra", None)
-        if raw is not None:
-            self._apply_overlay_scale(raw)
-
     # ------------------------------------------------------------------
-    # Ventana de filtros
+    # Ventana de filtros / overlay / about  →  delegados a módulos ui_*
     # ------------------------------------------------------------------
 
     def _open_filter_window(self):
-        if self._filter_win and self._filter_win.winfo_exists():
-            self._filter_win.destroy(); return
-
-        win = tk.Toplevel(self)
-        self._filter_win = win
-        win.title(self.t("filters_title"))
-        win.configure(bg=BG)
-        win.resizable(False, False)
-        win.attributes("-topmost", True)
-
-        def _slider_row(parent, label_key, var, from_, to_, fmt):
-            row = tk.Frame(parent, bg=BG)
-            row.pack(fill="x", padx=16, pady=4)
-            tk.Label(row, text=self.t(label_key), width=13, anchor="w",
-                     font=("Segoe UI", 9), bg=BG, fg=FG_DIM).pack(side="left")
-            val_lbl = tk.Label(row, width=5, anchor="e",
-                               font=("Consolas", 9), bg=BG, fg=ACCENT2)
-            val_lbl.pack(side="right")
-
-            def _update(v):
-                val_lbl.config(text=fmt(float(v)))
-
-            sl = ttk.Scale(row, from_=from_, to=to_, orient="horizontal",
-                           variable=var, command=_update)
-            sl.pack(side="left", fill="x", expand=True, padx=(8, 8))
-            val_lbl.config(text=fmt(var.get()))
-            return sl
-
-        def _sync_brightness(v):
-            if self._thread and self._thread.is_alive():
-                self._thread.filter_brightness = float(v)
-        def _sync_contrast(v):
-            if self._thread and self._thread.is_alive():
-                self._thread.filter_contrast = float(v)
-        def _sync_saturation(v):
-            if self._thread and self._thread.is_alive():
-                self._thread.filter_saturation = float(v)
-        def _sync_blur(v):
-            if self._thread and self._thread.is_alive():
-                self._thread.filter_blur = int(float(v))
-
-        tk.Frame(win, bg=BG, height=8).pack()
-        _slider_row(win, "lbl_zoom",       self._zoom_var,  1.0, 5.0,  lambda v: f"{v:.1f}×")
-        tk.Frame(win, bg=BG_BTN, height=1).pack(fill="x", padx=16, pady=(4, 0))
-        _slider_row(win, "lbl_brightness", self._bri_var,  -100, 100,  lambda v: f"{v:+.0f}")
-        _slider_row(win, "lbl_contrast",   self._con_var,   0.5, 2.0,  lambda v: f"{v:.2f}")
-        _slider_row(win, "lbl_saturation", self._sat_var,   0.0, 2.0,  lambda v: f"{v:.2f}")
-        _slider_row(win, "lbl_blur",        self._blur_var,  0,   10,   lambda v: f"{int(v)}")
-
-        self._zoom_var.trace_add("write", lambda *_: self._sync_zoom())
-        self._bri_var.trace_add("write",  lambda *_: _sync_brightness(self._bri_var.get()))
-        self._con_var.trace_add("write",  lambda *_: _sync_contrast(self._con_var.get()))
-        self._sat_var.trace_add("write",  lambda *_: _sync_saturation(self._sat_var.get()))
-        self._blur_var.trace_add("write", lambda *_: _sync_blur(self._blur_var.get()))
-
-        def _reset():
-            self._zoom_var.set(1.0)
-            self._bri_var.set(0.0)
-            self._con_var.set(1.0)
-            self._sat_var.set(1.0)
-            self._blur_var.set(0.0)
-
-        tk.Frame(win, bg=BG_BTN, height=1).pack(fill="x", padx=16, pady=(10, 0))
-        tk.Button(win, text=self.t("btn_reset_filters"), command=_reset,
-                  bg=BG_BTN, fg=FG, activebackground=ACCENT, activeforeground="#fff",
-                  relief="flat", font=("Segoe UI", 9), padx=12, pady=5,
-                  cursor="hand2", bd=0).pack(pady=8)
-
-        win.update_idletasks()
-        x = self.winfo_x() + self.winfo_width() + 8
-        y = self.winfo_y()
-        win.geometry(f"+{x}+{y}")
-
-    # ------------------------------------------------------------------
-    # Ventana de overlay
-    # ------------------------------------------------------------------
+        open_filter_window(self)
 
     def _open_overlay_window(self):
-        if self._overlay_win and self._overlay_win.winfo_exists():
-            self._overlay_win.destroy(); return
-
-        ov = self._overlay
-        win = tk.Toplevel(self)
-        self._overlay_win = win
-        win.title(self.t("overlay_title"))
-        win.configure(bg=BG)
-        win.resizable(False, False)
-        win.attributes("-topmost", True)
-
-        def _lbl(parent, key):
-            tk.Label(parent, text=self.t(key), width=14, anchor="w",
-                     font=("Segoe UI", 9), bg=BG, fg=FG_DIM).pack(side="left")
-
-        def _section(title):
-            tk.Label(win, text=f"── {self.t(title)} ──",
-                     font=("Segoe UI", 9, "bold"), bg=BG, fg=ACCENT2,
-                     anchor="w").pack(fill="x", padx=16, pady=(10, 4))
-
-        def _row():
-            f = tk.Frame(win, bg=BG)
-            f.pack(fill="x", padx=16, pady=3)
-            return f
-
-        enable_var = tk.BooleanVar(value=ov.enabled)
-        def _toggle_enable():
-            ov.enabled = enable_var.get()
-        tk.Frame(win, bg=BG, height=8).pack()
-        tk.Checkbutton(win, text=self.t("lbl_ovl_enable"), variable=enable_var,
-                       command=_toggle_enable,
-                       font=("Segoe UI", 10, "bold"), bg=BG, fg=FG,
-                       activebackground=BG, selectcolor=BG_BTN,
-                       cursor="hand2").pack(anchor="w", padx=16)
-
-        # ══════════════════ TEXTO ══════════════════
-        _section("ovl_section_text")
-
-        r = _row(); _lbl(r, "lbl_ovl_text")
-        text_var = tk.StringVar(value=ov.text)
-        tk.Entry(r, textvariable=text_var, width=26,
-                 bg=BG_BTN, fg=FG, insertbackground=FG,
-                 relief="flat", font=("Segoe UI", 10)).pack(side="left", fill="x", expand=True)
-        def _upd_text(*_): ov.text = text_var.get()
-        text_var.trace_add("write", _upd_text)
-
-        r = _row(); _lbl(r, "lbl_ovl_size")
-        size_var = tk.DoubleVar(value=ov.font_scale)
-        size_lbl = tk.Label(r, width=4, anchor="e", font=("Consolas", 9), bg=BG, fg=ACCENT2)
-        size_lbl.pack(side="right")
-        def _upd_size(v):
-            ov.font_scale = float(v); size_lbl.config(text=f"{float(v):.1f}")
-        size_lbl.config(text=f"{ov.font_scale:.1f}")
-        ttk.Scale(r, from_=0.4, to=4.0, orient="horizontal",
-                  variable=size_var, command=_upd_size).pack(side="left", fill="x", expand=True, padx=(8,8))
-
-        r = _row(); _lbl(r, "lbl_ovl_color")
-        _color_hex = [f"#{ov.text_color_bgr[2]:02x}{ov.text_color_bgr[1]:02x}{ov.text_color_bgr[0]:02x}"]
-        color_preview = tk.Label(r, width=3, bg=_color_hex[0], relief="flat")
-        color_preview.pack(side="left", padx=(0, 6))
-        def _pick_color():
-            import tkinter.colorchooser as cc
-            result = cc.askcolor(color=_color_hex[0], parent=win)
-            if result[1]:
-                _color_hex[0] = result[1]
-                color_preview.config(bg=result[1])
-                hex_col = result[1].lstrip("#")
-                r2, g2, b2 = int(hex_col[0:2],16), int(hex_col[2:4],16), int(hex_col[4:6],16)
-                ov.text_color_bgr = (b2, g2, r2)
-        tk.Button(r, text=self.t("btn_pick_color"), command=_pick_color,
-                  bg=BG_BTN, fg=FG, activebackground=ACCENT, activeforeground="#fff",
-                  relief="flat", font=("Segoe UI", 9), padx=8, pady=2,
-                  cursor="hand2", bd=0).pack(side="left")
-
-        r = _row(); _lbl(r, "lbl_ovl_text_pos")
-        self._build_pos_grid(r, ov, "text_pos")
-
-        r = _row(); _lbl(r, "lbl_ovl_text_bg")
-        bg_var = tk.DoubleVar(value=ov.text_bg_alpha)
-        bg_lbl = tk.Label(r, width=4, anchor="e", font=("Consolas", 9), bg=BG, fg=ACCENT2)
-        bg_lbl.pack(side="right")
-        def _upd_bg(v):
-            ov.text_bg_alpha = float(v); bg_lbl.config(text=f"{float(v):.0%}")
-        bg_lbl.config(text=f"{ov.text_bg_alpha:.0%}")
-        ttk.Scale(r, from_=0.0, to=1.0, orient="horizontal",
-                  variable=bg_var, command=_upd_bg).pack(side="left", fill="x", expand=True, padx=(8,8))
-
-        # ══════════════════ IMAGEN ══════════════════
-        tk.Frame(win, bg=BG_BTN, height=1).pack(fill="x", padx=16, pady=(8, 0))
-        _section("ovl_section_img")
-
-        r = _row(); _lbl(r, "lbl_ovl_img_file")
-        img_path_var = tk.StringVar(value=ov.img_path)
-        tk.Entry(r, textvariable=img_path_var, width=20,
-                 bg=BG_BTN, fg=FG, insertbackground=FG,
-                 relief="flat", font=("Segoe UI", 9)).pack(side="left", fill="x", expand=True, padx=(0,4))
-        def _browse_img():
-            p = filedialog.askopenfilename(
-                parent=win, title=self.t("dlg_pick_img"),
-                filetypes=[("PNG", "*.png"), ("All", "*.*")])
-            if p:
-                img_path_var.set(p)
-                self._load_overlay_image(p)
-        tk.Button(r, text=self.t("btn_browse"), command=_browse_img,
-                  bg=BG_BTN, fg=FG, activebackground=ACCENT, activeforeground="#fff",
-                  relief="flat", font=("Segoe UI", 9), padx=6, pady=2,
-                  cursor="hand2", bd=0).pack(side="left")
-
-        r = _row(); _lbl(r, "lbl_ovl_img_pos")
-        self._build_pos_grid(r, ov, "img_pos")
-
-        r = _row(); _lbl(r, "lbl_ovl_img_scale")
-        sc_var = tk.DoubleVar(value=ov.img_scale)
-        sc_lbl = tk.Label(r, width=4, anchor="e", font=("Consolas", 9), bg=BG, fg=ACCENT2)
-        sc_lbl.pack(side="right")
-        def _upd_scale(v):
-            ov.img_scale = float(v)
-            sc_lbl.config(text=f"{float(v):.0%}")
-            self._reload_overlay_image()
-        sc_lbl.config(text=f"{ov.img_scale:.0%}")
-        ttk.Scale(r, from_=0.05, to=1.0, orient="horizontal",
-                  variable=sc_var, command=_upd_scale).pack(side="left", fill="x", expand=True, padx=(8,8))
-
-        r = _row(); _lbl(r, "lbl_ovl_img_alpha")
-        al_var = tk.DoubleVar(value=ov.img_alpha)
-        al_lbl = tk.Label(r, width=4, anchor="e", font=("Consolas", 9), bg=BG, fg=ACCENT2)
-        al_lbl.pack(side="right")
-        def _upd_alpha(v):
-            ov.img_alpha = float(v); al_lbl.config(text=f"{float(v):.0%}")
-        al_lbl.config(text=f"{ov.img_alpha:.0%}")
-        ttk.Scale(r, from_=0.0, to=1.0, orient="horizontal",
-                  variable=al_var, command=_upd_alpha).pack(side="left", fill="x", expand=True, padx=(8,8))
-
-        tk.Frame(win, bg=BG, height=10).pack()
-        win.update_idletasks()
-        x = self.winfo_x() + self.winfo_width() + 8
-        y = self.winfo_y() + 220
-        win.geometry(f"+{x}+{y}")
-
-    # ------------------------------------------------------------------
-    # Diálogo About
-    # ------------------------------------------------------------------
+        open_overlay_window(self)
 
     def _show_about(self):
-        if self._about_win and self._about_win.winfo_exists():
-            self._about_win.destroy(); return
-
-        REPO_URL = "https://github.com/nullfuzz-pentest/webcam_virtual/"
-
-        win = tk.Toplevel(self)
-        self._about_win = win
-        win.title(self.t("about_title"))
-        win.configure(bg=BG)
-        win.resizable(False, False)
-
-        hdr = tk.Frame(win, bg=ACCENT, pady=14)
-        hdr.pack(fill="x")
-        tk.Label(hdr, text="Virtual Webcam", font=("Segoe UI", 18, "bold"),
-                 bg=ACCENT, fg="#ffffff").pack()
-        tk.Label(hdr, text=f"v1.2  ·  {self.t('title_sub')}", font=("Segoe UI", 11),
-                 bg=ACCENT, fg="#dde").pack()
-
-        body = tk.Frame(win, bg=BG, padx=28, pady=20)
-        body.pack(fill="x")
-
-        def _row(label: str, value: str):
-            row = tk.Frame(body, bg=BG)
-            row.pack(fill="x", pady=4)
-            tk.Label(row, text=label, font=("Segoe UI", 9, "bold"),
-                     bg=BG, fg=FG_DIM, width=12, anchor="e").pack(side="left", padx=(0, 10))
-            tk.Label(row, text=value, font=("Segoe UI", 10),
-                     bg=BG, fg=FG, anchor="w").pack(side="left")
-
-        _row(self.t("about_creator"), "nullfuzz")
-        _row(self.t("about_license"), "MIT")
-
-        repo_row = tk.Frame(body, bg=BG)
-        repo_row.pack(fill="x", pady=4)
-        tk.Label(repo_row, text=self.t("about_repo"), font=("Segoe UI", 9, "bold"),
-                 bg=BG, fg=FG_DIM, width=12, anchor="e").pack(side="left", padx=(0, 10))
-        link = tk.Label(repo_row, text=REPO_URL, font=("Segoe UI", 10, "underline"),
-                        bg=BG, fg=ACCENT2, cursor="hand2", anchor="w")
-        link.pack(side="left")
-        link.bind("<Button-1>", lambda _: webbrowser.open(REPO_URL))
-
-        tk.Frame(win, bg=BG_BTN, height=1).pack(fill="x", padx=20)
-        tk.Button(
-            win, text=self.t("about_close"), command=win.destroy,
-            bg=ACCENT, fg="#ffffff", activebackground=ACCENT, activeforeground="#ffffff",
-            relief="flat", font=("Segoe UI", 10, "bold"),
-            padx=24, pady=7, cursor="hand2", bd=0,
-        ).pack(pady=16)
-
-        win.update_idletasks()
-        x = self.winfo_x() + (self.winfo_width()  - win.winfo_width())  // 2
-        y = self.winfo_y() + (self.winfo_height() - win.winfo_height()) // 2
-        win.geometry(f"+{x}+{y}")
+        open_about(self)
 
     # ------------------------------------------------------------------
     # Captura de pantalla
@@ -1250,6 +1032,7 @@ class App(_AppBase):
             # segunda pulsación: limpiar región
             self._screen_region = None
             self._btn_pick_region.config(text=self.t("btn_pick_region"))
+            self._bind_tooltip(self._btn_pick_region, "tip_pick_region")
             idx = self._screen_monitor_idx
             if idx == 0:
                 self.source_var.set(self.t("screen_label_all"))
@@ -1276,6 +1059,7 @@ class App(_AppBase):
                                         w=r["width"], h=r["height"],
                                         x=r["left"], y=r["top"]))
             self._btn_pick_region.config(text=self.t("btn_clear_region"))
+            self._bind_tooltip(self._btn_pick_region, "tip_clear_region")
 
     # ------------------------------------------------------------------
     # Metadatos del archivo fuente
@@ -1419,7 +1203,6 @@ class App(_AppBase):
         if PYVIRTUALCAM_AVAILABLE and backend != "auto":
             cam_kwargs["backend"] = backend
 
-        self._last_preview_time = 0.0
         self._thread = StreamThread(
             source=source, source_type=stype,
             cam_width=w, cam_height=h, fps=fps,
@@ -1443,8 +1226,10 @@ class App(_AppBase):
         self._thread.zoom              = self._zoom_var.get()
         self._thread.zoom_cx           = self._zoom_cx
         self._thread.zoom_cy           = self._zoom_cy
+        self._thread.rotation          = self._rotation_var.get()
         self._thread.overlay           = self._overlay
         self._thread.show_cursor       = self._show_cursor_var.get()
+        self._thread.preview_interval  = PREVIEW_MIN_INTERVAL
         self._set_led("active")
         self._thread.start()
         self._poll_fps()
@@ -1459,8 +1244,10 @@ class App(_AppBase):
         self.cover_var.set(cover)
         if cover:
             self.btn_fit.config(text=self.t("btn_crop"), bg=BG_BTN)
+            self._bind_tooltip(self.btn_fit, "tip_crop")
         else:
             self.btn_fit.config(text=self.t("btn_letterbox"), bg=ACCENT)
+            self._bind_tooltip(self.btn_fit, "tip_letterbox")
         if self._thread and self._thread.is_alive():
             self._thread.cover = cover
 
@@ -1485,11 +1272,7 @@ class App(_AppBase):
     # ------------------------------------------------------------------
 
     def _on_frame(self, rgb: np.ndarray):
-        now = time.monotonic()
-        if now - self._last_preview_time >= PREVIEW_MIN_INTERVAL:
-            self._last_preview_time = now
-            self.after(0, self._show_frame, rgb)
-
+        self.after(0, self._show_frame, rgb)
         if self._thread and self._thread.total_frames > 0 and not self._seek_dragging:
             prog    = self._thread.current_frame / self._thread.total_frames
             elapsed = self._thread.current_frame / max(self._thread.src_fps, 1)
@@ -1570,6 +1353,21 @@ class App(_AppBase):
     # ------------------------------------------------------------------
     # Cierre
     # ------------------------------------------------------------------
+
+    def _remove_titlebar_icon(self):
+        try:
+            import ctypes
+            hwnd = self.winfo_id()
+            GWL_EXSTYLE    = -20
+            WS_EX_DLGMODALFRAME = 0x00000001
+            cur_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, cur_style | WS_EX_DLGMODALFRAME)
+            ctypes.windll.user32.SetWindowPos(
+                hwnd, None, 0, 0, 0, 0,
+                0x0001 | 0x0002 | 0x0004 | 0x0020,  # SWP_NOSIZE|NOMOVE|NOZORDER|FRAMECHANGED
+            )
+        except Exception:
+            pass
 
     def _on_close(self):
         self._stop()

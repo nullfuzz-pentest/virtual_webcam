@@ -20,7 +20,7 @@ except Exception:
     _CTYPES_OK = False
 
 from constants import PYVIRTUALCAM_AVAILABLE, MSS_AVAILABLE
-from image_utils import fit_frame, bgr_to_rgb, apply_filters, apply_zoom, load_gif_frames
+from image_utils import fit_frame, bgr_to_rgb, apply_filters, apply_zoom, apply_rotation, load_gif_frames
 from overlay import OverlayConfig, apply_overlay
 
 if PYVIRTUALCAM_AVAILABLE:
@@ -66,6 +66,7 @@ class StreamThread(threading.Thread):
         self.zoom:              float = 1.0    #  1.0 .. 5.0 (zoom digital)
         self.zoom_cx:           float = 0.5    #  0.0 .. 1.0 (anchor horizontal)
         self.zoom_cy:           float = 0.5    #  0.0 .. 1.0 (anchor vertical)
+        self.rotation:          int   = 0      #  0 / 90 / 180 / 270
 
         # overlay (referencia al objeto del App, modificable desde la UI)
         self.overlay: OverlayConfig = OverlayConfig()
@@ -85,6 +86,10 @@ class StreamThread(threading.Thread):
         self._fps_count    = 0
         self._fps_window_t = time.monotonic()
         self.measured_fps  = 0.0
+
+        # throttle del preview: sólo llamar on_frame cuando haya pasado el intervalo
+        self.preview_interval: float = 0.0   # 0 = sin límite; setter desde App
+        self._preview_last_t: float  = 0.0
 
     # ------------------------------------------------------------------
     # Control público
@@ -148,6 +153,19 @@ class StreamThread(threading.Thread):
             self._fps_count    = 0
             self._fps_window_t = now
 
+    def _tick_preview(self, frame_rgb) -> bool:
+        """Llama on_frame sólo si ha pasado preview_interval desde la última vez.
+        Retorna True si el frame fue enviado al callback."""
+        if self.preview_interval <= 0.0:
+            self.on_frame(frame_rgb)
+            return True
+        now = time.monotonic()
+        if now - self._preview_last_t >= self.preview_interval:
+            self._preview_last_t = now
+            self.on_frame(frame_rgb)
+            return True
+        return False
+
     def _draw_cursor(self, frame_bgr: np.ndarray, x: int, y: int) -> np.ndarray:
         """Dibuja un cursor de flecha en las coordenadas (x, y) del frame."""
         h, w = frame_bgr.shape[:2]
@@ -182,7 +200,7 @@ class StreamThread(threading.Thread):
         """Firma de todos los parámetros que afectan el procesamiento de un frame estático."""
         ov = self.overlay
         return (
-            self.mirror, self.zoom,
+            self.mirror, self.zoom, self.rotation,
             self.filter_brightness, self.filter_contrast,
             self.filter_saturation, self.filter_blur,
             ov.enabled, ov.text, ov.font_scale,
@@ -191,11 +209,13 @@ class StreamThread(threading.Thread):
         )
 
     def _process(self, frame_bgr: np.ndarray) -> np.ndarray:
-        """Aplica zoom → flip → filtros → overlay y devuelve frame RGB listo para enviar."""
+        """Aplica zoom → flip → rotación → filtros → overlay y devuelve frame RGB listo para enviar."""
         if self.zoom > 1.0:
             frame_bgr = apply_zoom(frame_bgr, self.zoom, self.zoom_cx, self.zoom_cy)
         if self.mirror:
             frame_bgr = cv2.flip(frame_bgr, 1)
+        if self.rotation:
+            frame_bgr = apply_rotation(frame_bgr, self.rotation)
         frame_bgr = apply_filters(frame_bgr, self.filter_brightness,
                                   self.filter_contrast, self.filter_saturation,
                                   self.filter_blur)
@@ -247,7 +267,7 @@ class StreamThread(threading.Thread):
                     else:
                         time.sleep(delay)
                     self._tick_fps()
-                    self.on_frame(frame_rgb)
+                    self._tick_preview(frame_rgb)
         else:
             # Fallback: PIL.ImageGrab (Windows / macOS only)
             try:
@@ -282,7 +302,7 @@ class StreamThread(threading.Thread):
                 else:
                     time.sleep(delay)
                 self._tick_fps()
-                self.on_frame(frame_rgb)
+                self._tick_preview(frame_rgb)
 
     def _loop_image(self, cam):
         frame_bgr = cv2.imread(str(self.source))
@@ -309,7 +329,7 @@ class StreamThread(threading.Thread):
             else:
                 time.sleep(delay)
             self._tick_fps()
-            self.on_frame(frame_rgb)
+            self._tick_preview(frame_rgb)
 
     def _loop_gif(self, cam):
         frames = load_gif_frames(self.source, self.cam_width, self.cam_height, self.cover)
@@ -343,7 +363,7 @@ class StreamThread(threading.Thread):
                     else:
                         time.sleep(delay)
                     self._tick_fps()
-                    self.on_frame(frame_rgb)
+                    self._tick_preview(frame_rgb)
 
             if not self.loop:
                 break
@@ -390,6 +410,6 @@ class StreamThread(threading.Thread):
                     time.sleep(delay)
 
                 self._tick_fps()
-                self.on_frame(frame_rgb)
+                self._tick_preview(frame_rgb)
         finally:
             cap.release()

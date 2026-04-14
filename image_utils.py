@@ -91,6 +91,23 @@ def apply_zoom(frame: np.ndarray, zoom: float,
     return cv2.resize(cropped, (w, h), interpolation=cv2.INTER_LINEAR)
 
 
+def apply_rotation(frame: np.ndarray, degrees: int) -> np.ndarray:
+    """Rota el frame en múltiplos de 90°. Para 90°/270° reajusta al tamaño original con letterbox."""
+    if degrees == 0:
+        return frame
+    h, w = frame.shape[:2]
+    if degrees == 90:
+        rotated = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    elif degrees == 180:
+        return cv2.rotate(frame, cv2.ROTATE_180)
+    elif degrees == 270:
+        rotated = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    else:
+        return frame
+    # 90/270: el frame quedó h×w; reajustar a w×h con letterbox
+    return fit_frame(rotated, w, h, cover=False)
+
+
 def bgr_to_rgb(frame: np.ndarray) -> np.ndarray:
     """Convierte un frame de BGR (OpenCV) a RGB."""
     return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

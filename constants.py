@@ -34,6 +34,13 @@ except ImportError:
     TkinterDnD = None   # type: ignore[assignment]
     DND_FILES   = None  # type: ignore[assignment]
 
+try:
+    import psutil as _psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    _psutil = None       # type: ignore[assignment]
+    PSUTIL_AVAILABLE = False
+
 # Clase base dinámica: TkinterDnD.Tk habilita drag & drop; fallback a tk.Tk
 _AppBase = TkinterDnD.Tk if TKDND_AVAILABLE else tk.Tk
 

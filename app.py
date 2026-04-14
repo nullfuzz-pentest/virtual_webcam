@@ -18,7 +18,7 @@ from PIL import Image, ImageTk
 import constants as _constants_mod
 from constants import (
     _AppBase, TKDND_AVAILABLE, DND_FILES, PYVIRTUALCAM_AVAILABLE, PixelFormat,
-    MSS_AVAILABLE, ASPECT_PRESETS, _PRESET_NUMERIC_KEYS,
+    MSS_AVAILABLE, PSUTIL_AVAILABLE, ASPECT_PRESETS, _PRESET_NUMERIC_KEYS,
     PREVIEW_W, PREVIEW_H, PREVIEW_MIN_INTERVAL,
     BG, BG_PANEL, BG_BTN, ACCENT, ACCENT2, FG, FG_DIM, RED, STATUS_BG,
     THEMES, THEME_KEYS,
@@ -123,7 +123,7 @@ class _RegionPicker:
 class App(_AppBase):
     def __init__(self):
         super().__init__()
-        self.title("Virtual Webcam v1.4")
+        self.title("Virtual Webcam v1.5")
         self.configure(bg=BG)
         self.resizable(True, True)
         self.minsize(640, 480)
@@ -219,6 +219,7 @@ class App(_AppBase):
         self._setup_dnd()
         self._center_window()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.after(100, self._poll_cpu)
 
     # ------------------------------------------------------------------
     # i18n
@@ -397,7 +398,7 @@ class App(_AppBase):
             self.title("🎃 Virtual Webcam 💀")
         else:
             self._lbl_halloween.pack_forget()
-            self.title("Virtual Webcam v1.4")
+            self.title("Virtual Webcam v1.5")
 
     @staticmethod
     def _recolor_widget(w, old_new: dict):
@@ -482,44 +483,54 @@ class App(_AppBase):
         lang_cb.pack(side="left")
         lang_cb.bind("<<ComboboxSelected>>", self._on_lang_change)
 
+        # ── barra de estado (se empaqueta primero con side="bottom" para quedar siempre abajo)
+        status_bar = tk.Frame(self, bg=STATUS_BG, pady=5)
+        status_bar.pack(fill="x", side="bottom")
+
+        self._led = tk.Canvas(status_bar, width=12, height=12,
+                              bg=STATUS_BG, highlightthickness=0)
+        self._led.pack(side="left", padx=(10, 6))
+        self._led_oval = self._led.create_oval(2, 2, 10, 10, fill="#44445a", outline="")
+
+        self.status_var = tk.StringVar(value=self.t("status_ready"))
+        tk.Label(status_bar, textvariable=self.status_var, font=("Segoe UI", 9),
+                 bg=STATUS_BG, fg=FG_DIM, anchor="w").pack(side="left", fill="x", expand=True)
+
+        # metadatos del archivo (derecha de la barra de estado)
+        self.info_var = tk.StringVar(value="")
+        tk.Label(status_bar, textvariable=self.info_var, font=("Consolas", 9),
+                 bg=STATUS_BG, fg=ACCENT2, anchor="e").pack(side="right", padx=(0, 12))
+
+        # CPU usage
+        self._cpu_var = tk.StringVar(value="")
+        tk.Label(status_bar, textvariable=self._cpu_var, font=("Consolas", 9),
+                 bg=STATUS_BG, fg=FG_DIM, anchor="e", width=8).pack(side="right", padx=(0, 4))
+
+        # tooltip
+        self._tooltip_var = tk.StringVar(value="")
+        self._tooltip_lbl = tk.Label(status_bar, textvariable=self._tooltip_var,
+                                     font=("Segoe UI", 9, "italic"),
+                                     bg=STATUS_BG, fg=ACCENT, anchor="e",
+                                     width=38)
+        self._tooltip_lbl.pack(side="right", padx=(0, 16))
+
         # ── preview
         self.preview_outer = tk.Frame(self, bg="#000000", padx=2, pady=2)
-        self.preview_outer.pack(padx=16, pady=(0, 10))
+        self.preview_outer.pack(fill="both", expand=True, padx=16, pady=(0, 4))
         self.canvas = tk.Canvas(self.preview_outer, width=self.preview_w, height=self.preview_h,
                                 bg="#000000", highlightthickness=0, cursor="hand2")
-        self.canvas.pack()
+        self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<Button-1>",        self._on_canvas_press)
         self.canvas.bind("<B1-Motion>",       self._on_canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_canvas_release)
         self.canvas.bind("<Motion>",          self._on_canvas_motion)
         self.canvas.bind("<Leave>",           self._on_canvas_leave)
+        self.canvas.bind("<Configure>",       self._on_canvas_resize)
         self._draw_placeholder()
-
-        # ── barra de progreso (video)
-        progress_frame = tk.Frame(self, bg=BG)
-        progress_frame.pack(fill="x", padx=16, pady=(0, 6))
-
-        self.progress_var = tk.DoubleVar(value=0)
-        self.progress = ttk.Scale(progress_frame, from_=0, to=1,
-                                  orient="horizontal", variable=self.progress_var,
-                                  command=self._on_seek_drag)
-        self.progress.pack(fill="x")
-        self.progress.bind("<Button-1>",        self._on_seek_click)
-        self.progress.bind("<B1-Motion>",       self._on_seek_click)
-        self.progress.bind("<ButtonRelease-1>", self._on_seek_release)
-
-        time_row = tk.Frame(progress_frame, bg=BG)
-        time_row.pack(fill="x")
-        self.time_label = tk.Label(time_row, text="0:00 / 0:00",
-                                   font=("Segoe UI", 9), bg=BG, fg=FG_DIM)
-        self.time_label.pack(side="left")
-        self.fps_label = tk.Label(time_row, text="",
-                                  font=("Segoe UI", 9), bg=BG, fg=FG_DIM)
-        self.fps_label.pack(side="right")
 
         # ── panel de controles
         ctrl = tk.Frame(self, bg=BG_PANEL, padx=16, pady=12)
-        ctrl.pack(fill="x", padx=16, pady=(0, 6))
+        ctrl.pack(fill="x", side="bottom", padx=16, pady=(0, 4))
 
         # fila 1: thumbnail + archivo + botones abrir / capturar pantalla
         row1 = tk.Frame(ctrl, bg=BG_PANEL)
@@ -673,31 +684,27 @@ class App(_AppBase):
         self.btn_pause.config(state="disabled")
         self.btn_stop.config(state="disabled")
 
-        # ── barra de estado
-        status_bar = tk.Frame(self, bg=STATUS_BG, pady=5)
-        status_bar.pack(fill="x", padx=0, pady=(8, 0))
+        # ── barra de progreso (video)
+        progress_frame = tk.Frame(self, bg=BG)
+        progress_frame.pack(fill="x", side="bottom", padx=16, pady=(0, 4))
 
-        self._led = tk.Canvas(status_bar, width=12, height=12,
-                              bg=STATUS_BG, highlightthickness=0)
-        self._led.pack(side="left", padx=(10, 6))
-        self._led_oval = self._led.create_oval(2, 2, 10, 10, fill="#44445a", outline="")
+        self.progress_var = tk.DoubleVar(value=0)
+        self.progress = ttk.Scale(progress_frame, from_=0, to=1,
+                                  orient="horizontal", variable=self.progress_var,
+                                  command=self._on_seek_drag)
+        self.progress.pack(fill="x")
+        self.progress.bind("<Button-1>",        self._on_seek_click)
+        self.progress.bind("<B1-Motion>",       self._on_seek_click)
+        self.progress.bind("<ButtonRelease-1>", self._on_seek_release)
 
-        self.status_var = tk.StringVar(value=self.t("status_ready"))
-        tk.Label(status_bar, textvariable=self.status_var, font=("Segoe UI", 9),
-                 bg=STATUS_BG, fg=FG_DIM, anchor="w").pack(side="left", fill="x", expand=True)
-
-        # metadatos del archivo (derecha de la barra de estado)
-        self.info_var = tk.StringVar(value="")
-        tk.Label(status_bar, textvariable=self.info_var, font=("Consolas", 9),
-                 bg=STATUS_BG, fg=ACCENT2, anchor="e").pack(side="right", padx=(0, 12))
-
-        # tooltip — se muestra al centro al pasar el cursor sobre un widget
-        self._tooltip_var = tk.StringVar(value="")
-        self._tooltip_lbl = tk.Label(status_bar, textvariable=self._tooltip_var,
-                                     font=("Segoe UI", 9, "italic"),
-                                     bg=STATUS_BG, fg=ACCENT, anchor="e",
-                                     width=38)
-        self._tooltip_lbl.pack(side="right", padx=(0, 16))
+        time_row = tk.Frame(progress_frame, bg=BG)
+        time_row.pack(fill="x")
+        self.time_label = tk.Label(time_row, text="0:00 / 0:00",
+                                   font=("Segoe UI", 9), bg=BG, fg=FG_DIM)
+        self.time_label.pack(side="left")
+        self.fps_label = tk.Label(time_row, text="",
+                                  font=("Segoe UI", 9), bg=BG, fg=FG_DIM)
+        self.fps_label.pack(side="right")
 
         # ── estilos ttk
         style = ttk.Style(self)
@@ -934,6 +941,11 @@ class App(_AppBase):
         if self._thread and self._thread.is_alive():
             self._thread.zoom_cx = 0.5
             self._thread.zoom_cy = 0.5
+
+    def _on_canvas_resize(self, *_):
+        """Redibuja el placeholder centrado cuando el canvas cambia de tamaño."""
+        if not self._file_loaded:
+            self._draw_placeholder()
 
     # ------------------------------------------------------------------
     # Cursor de pantalla
@@ -1338,6 +1350,12 @@ class App(_AppBase):
         def fmt(s: float) -> str:
             return f"{int(s) // 60}:{int(s) % 60:02d}"
         self.time_label.config(text=f"{fmt(elapsed)} / {fmt(total)}")
+
+    def _poll_cpu(self):
+        if PSUTIL_AVAILABLE:
+            cpu = _constants_mod._psutil.cpu_percent(interval=None)
+            self._cpu_var.set(f"CPU {cpu:.0f}%")
+        self.after(2000, self._poll_cpu)
 
     def _poll_fps(self):
         if self._thread and self._thread.is_alive():

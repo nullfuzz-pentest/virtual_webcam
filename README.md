@@ -1,8 +1,8 @@
-# Virtual Webcam Emulator v1.3
+# Virtual Webcam Emulator v1.4
 
 Emula una webcam virtual usando imágenes, videos o captura de pantalla como fuente, con interfaz gráfica en tiempo real.
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.3-purple)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.4-purple)
 
 ---
 

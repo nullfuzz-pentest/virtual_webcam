@@ -1,8 +1,8 @@
-# Virtual Webcam Emulator v1.5
+# Virtual Webcam Emulator v1.6
 
 Emula una webcam virtual usando imágenes, videos o captura de pantalla como fuente, con interfaz gráfica en tiempo real.
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.5-purple)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.6-purple)
 
 ---
 
@@ -28,7 +28,8 @@ Emula una webcam virtual usando imágenes, videos o captura de pantalla como fue
 - Tooltips en botones mostrados en la barra de estado al pasar el cursor
 - LED de estado: cámara activa / solo preview / error
 - **Ventana redimensionable** — resize manual y maximizar con canvas adaptable
-- **CPU en barra de estado** — porcentaje de uso de CPU en tiempo real (requiere `psutil`)
+- **CPU y RAM en barra de estado** — porcentaje de uso actualizado cada 2s (requiere `psutil`)
+- **Icono de aplicación personalizado** — icono visible en titlebar y barra de tareas de Windows
 
 ---
 
@@ -52,7 +53,7 @@ pip install opencv-python pyvirtualcam numpy pillow
 | --- | --- |
 | `mss` | Captura de pantalla multi-monitor |
 | `tkinterdnd2` | Drag & drop de archivos |
-| `psutil` | CPU % en barra de estado |
+| `psutil` | CPU % y RAM % en barra de estado |
 
 ```bash
 pip install mss tkinterdnd2 psutil
@@ -98,17 +99,26 @@ ui_filters.py       — ventana de filtros (brillo, contraste, saturación, blur
 ui_overlay.py       — ventana de overlay (texto + imagen PNG)
 ui_about.py         — diálogo "Acerca de"
 prefs.json          — preferencias guardadas (generado automáticamente)
+icono.png           — icono de la aplicación
+_app_icon.ico       — icono generado automáticamente al iniciar (Windows)
 ```
 
 ---
 
 ## Changelog
 
-### v1.5 (latest)
+### v1.6 (latest)
+
+- **RAM en barra de estado**: porcentaje de uso de memoria RAM mostrado junto al CPU, actualizado cada 2s (requiere `psutil`)
+- **Icono personalizado en titlebar**: carga `icono.png` y lo aplica como icono de la ventana
+- **Icono en barra de tareas de Windows**: genera `_app_icon.ico` con resoluciones 16/32/48/256px; se asigna vía `iconbitmap(default=...)` para que aparezca en la taskbar
+- **AppUserModelID**: `SetCurrentProcessExplicitAppUserModelID` llamado antes de crear la ventana para que Windows agrupe la app con su propio icono en la barra de tareas (no el del intérprete Python)
+
+### v1.5
 
 - **Ventana redimensionable**: resize manual arrastrando bordes y botón maximizar habilitados
 - **Canvas adaptable**: el área de preview se expande para llenar la ventana al maximizar; placeholder "Soltar archivo aquí" se redibuja centrado al cambiar el tamaño
-- **Barra de estado anclada al fondo**: refactorización del order de pack (side="bottom") para que la barra de estado quede siempre abajo, incluso al maximizar
+- **Barra de estado anclada al fondo**: refactorización del order de pack (`side="bottom"`) para que la barra de estado quede siempre abajo, incluso al maximizar
 - **Barra de progreso reubicada**: queda sobre el panel de botones, inmediatamente debajo del canvas
 - **CPU en barra de estado**: porcentaje de uso de CPU actualizado cada 2s (requiere `psutil`)
 - **Fix flickering**: canvas item persistente actualizado con `itemconfig` en vez de crear uno nuevo por frame

@@ -123,7 +123,7 @@ class _RegionPicker:
 class App(_AppBase):
     def __init__(self):
         super().__init__()
-        self.title("Virtual Webcam v1.5")
+        self.title("Virtual Webcam v1.6")
         self.configure(bg=BG)
         self.resizable(True, True)
         self.minsize(640, 480)
@@ -395,7 +395,7 @@ class App(_AppBase):
             self.title("🎃 Virtual Webcam 💀")
         else:
             self._lbl_halloween.pack_forget()
-            self.title("Virtual Webcam v1.5")
+            self.title("Virtual Webcam v1.6")
 
     @staticmethod
     def _recolor_widget(w, old_new: dict):

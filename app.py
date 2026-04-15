@@ -127,7 +127,7 @@ class App(_AppBase):
         self.configure(bg=BG)
         self.resizable(True, True)
         self.minsize(640, 480)
-        self.after(0, self._remove_titlebar_icon)
+        self.after(0, self._set_camera_icon)
 
         _prefs               = self._load_prefs()
         self._lang           = _prefs.get("lang", self._detect_lang())
@@ -1423,20 +1423,20 @@ class App(_AppBase):
     # Cierre
     # ------------------------------------------------------------------
 
-    def _remove_titlebar_icon(self):
+    def _set_camera_icon(self):
+        """Carga icono.png, genera .ico con PIL y lo asigna a titlebar y taskbar."""
         try:
-            import ctypes
-            hwnd = self.winfo_id()
-            GWL_EXSTYLE    = -20
-            WS_EX_DLGMODALFRAME = 0x00000001
-            cur_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, cur_style | WS_EX_DLGMODALFRAME)
-            ctypes.windll.user32.SetWindowPos(
-                hwnd, None, 0, 0, 0, 0,
-                0x0001 | 0x0002 | 0x0004 | 0x0020,  # SWP_NOSIZE|NOMOVE|NOZORDER|FRAMECHANGED
-            )
-        except Exception:
-            pass
+            from PIL import Image as _Img
+            png_path = Path(__file__).parent / "icono.png"
+            base = _Img.open(str(png_path)).convert("RGBA")
+
+            ico_path = Path(__file__).parent / "_app_icon.ico"
+            # PIL maneja correctamente el formato ICO incluyendo 256px
+            base.save(str(ico_path), format="ICO",
+                      sizes=[(16, 16), (32, 32), (48, 48), (256, 256)])
+            self.iconbitmap(default=str(ico_path))
+        except Exception as e:
+            print(f"[icon] {e}")
 
     def _on_close(self):
         self._stop()

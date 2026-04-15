@@ -33,6 +33,14 @@ import importlib
 os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "-8")   # AV_LOG_QUIET
 os.environ.setdefault("OPENCV_LOG_LEVEL", "OFF")
 
+# Debe llamarse ANTES de crear cualquier ventana para que Windows asigne
+# el ícono correcto en la barra de tareas (no el del intérprete de Python)
+try:
+    import ctypes
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("VirtualWebcam.App")
+except Exception:
+    pass
+
 if importlib.util.find_spec("PIL") is None:
     print("[ERROR] Pillow not installed. Run: pip install pillow")
     sys.exit(1)

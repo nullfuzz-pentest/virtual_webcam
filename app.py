@@ -498,7 +498,10 @@ class App(_AppBase):
         tk.Label(status_bar, textvariable=self.info_var, font=("Consolas", 9),
                  bg=STATUS_BG, fg=ACCENT2, anchor="e").pack(side="right", padx=(0, 12))
 
-        # CPU usage
+        # CPU + RAM usage
+        self._mem_var = tk.StringVar(value="")
+        tk.Label(status_bar, textvariable=self._mem_var, font=("Consolas", 9),
+                 bg=STATUS_BG, fg=FG_DIM, anchor="e", width=8).pack(side="right", padx=(0, 4))
         self._cpu_var = tk.StringVar(value="")
         tk.Label(status_bar, textvariable=self._cpu_var, font=("Consolas", 9),
                  bg=STATUS_BG, fg=FG_DIM, anchor="e", width=8).pack(side="right", padx=(0, 4))
@@ -1356,7 +1359,9 @@ class App(_AppBase):
     def _poll_cpu(self):
         if PSUTIL_AVAILABLE:
             cpu = _constants_mod._psutil.cpu_percent(interval=None)
+            mem = _constants_mod._psutil.virtual_memory().percent
             self._cpu_var.set(f"CPU {cpu:.0f}%")
+            self._mem_var.set(f"RAM {mem:.0f}%")
         self.after(2000, self._poll_cpu)
 
     def _poll_fps(self):

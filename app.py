@@ -314,10 +314,7 @@ class App(_AppBase):
         self._chk_mirror.config(text=self.t("lbl_mirror"))
         self._lbl_rotation.config(text=self.t("lbl_rotation"))
         self._lbl_zoom_main.config(text=self.t("lbl_zoom"))
-        if self.cover_var.get():
-            self.btn_fit.config(text=self.t("btn_crop"))
-        else:
-            self.btn_fit.config(text=self.t("btn_letterbox"))
+        self._refresh_fit_btn()
         self.btn_play.config(text=self.t("btn_start"))
         self.btn_stop.config(text=self.t("btn_stop"))
         self.btn_filters_open.config(text=self.t("btn_filters"))
@@ -721,12 +718,13 @@ class App(_AppBase):
         self._bind_tooltip(self.btn_open,          "tip_open")
         self._bind_tooltip(self.btn_screen,        "tip_screen")
         self._bind_tooltip(self._btn_pick_region,  "tip_pick_region")
-        self._bind_tooltip(self.btn_fit,           "tip_crop")
+        # tooltip de btn_fit lo gestiona _refresh_fit_btn()
         self._bind_tooltip(self._chk_mirror,       "tip_mirror")
         self._bind_tooltip(self._lbl_rotation,     "tip_rotation")
         self._bind_tooltip(self._rotation_cb,      "tip_rotation")
         self._bind_tooltip(self.btn_filters_open,  "tip_filters")
         self._bind_tooltip(self.btn_overlay_open,  "tip_overlay")
+        self._refresh_fit_btn()
 
     def _param(self, label: str, parent, attr: str, default: str) -> tk.Label:
         """Crea un par Label+Entry y devuelve el Label para poder actualizarlo."""
@@ -1285,14 +1283,18 @@ class App(_AppBase):
     def _toggle_fit(self):
         cover = not self.cover_var.get()
         self.cover_var.set(cover)
-        if cover:
-            self.btn_fit.config(text=self.t("btn_crop"), bg=BG_BTN)
-            self._bind_tooltip(self.btn_fit, "tip_crop")
-        else:
-            self.btn_fit.config(text=self.t("btn_letterbox"), bg=ACCENT)
-            self._bind_tooltip(self.btn_fit, "tip_letterbox")
+        self._refresh_fit_btn()
         if self._thread and self._thread.is_alive():
             self._thread.cover = cover
+
+    def _refresh_fit_btn(self):
+        """Actualiza texto, color y tooltip del botón Crop/Letterbox según el modo activo."""
+        if self.cover_var.get():
+            self.btn_fit.config(text=self.t("btn_crop"),       bg=ACCENT)
+            self._bind_tooltip(self.btn_fit, "tip_crop")
+        else:
+            self.btn_fit.config(text=self.t("btn_letterbox"),  bg=BG_BTN)
+            self._bind_tooltip(self.btn_fit, "tip_letterbox")
 
     def _pause(self):
         if not (self._thread and self._thread.is_alive()):

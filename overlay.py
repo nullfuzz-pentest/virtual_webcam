@@ -107,7 +107,8 @@ def get_overlay_rects(ov: OverlayConfig, fw: int, fh: int) -> dict:
             ix, iy = int(ov.img_xy[0] * fw), int(ov.img_xy[1] * fh)
         else:
             fn     = _OV_POSITIONS.get(ov.img_pos, _OV_POSITIONS["top-right"])
-            ix, iy = int(fn(fw, fh, iw, ih)[0]), int(fn(fw, fh, iw, ih)[1])
+            _pos   = fn(fw, fh, iw, ih)
+            ix, iy = int(_pos[0]), int(_pos[1])
         rects["img"] = (ix, iy, iw, ih)
     if ov.enabled and ov.text:
         font  = cv2.FONT_HERSHEY_DUPLEX

@@ -261,4 +261,10 @@ def open_overlay_window(app) -> None:
     win.update_idletasks()
     x = app.winfo_x() + app.winfo_width() + 8
     y = app.winfo_y() + 220
+    sw = app.winfo_screenwidth()
+    sh = app.winfo_screenheight()
+    x = min(x, sw - win.winfo_width()  - 4)
+    y = min(y, sh - win.winfo_height() - 4)
+    x = max(x, 0)
+    y = max(y, 0)
     win.geometry(f"+{x}+{y}")

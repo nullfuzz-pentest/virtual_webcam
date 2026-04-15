@@ -30,17 +30,17 @@ def load_gif_frames(path: Path, width: int, height: int, cover: bool) -> list:
     Retorna lista de (frame_bgr, duration_s)."""
     from PIL import Image as PilImage
     frames = []
-    gif = PilImage.open(str(path))
-    try:
-        while True:
-            frame_rgb = np.array(gif.convert("RGB"))
-            frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-            frame_bgr = fit_frame(frame_bgr, width, height, cover)
-            duration  = gif.info.get("duration", 100) / 1000.0
-            frames.append((frame_bgr, max(duration, 0.02)))
-            gif.seek(gif.tell() + 1)
-    except EOFError:
-        pass
+    with PilImage.open(str(path)) as gif:
+        try:
+            while True:
+                frame_rgb = np.array(gif.convert("RGB"))
+                frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+                frame_bgr = fit_frame(frame_bgr, width, height, cover)
+                duration  = gif.info.get("duration", 100) / 1000.0
+                frames.append((frame_bgr, max(duration, 0.02)))
+                gif.seek(gif.tell() + 1)
+        except EOFError:
+            pass
     return frames
 
 
@@ -117,7 +117,7 @@ def apply_filters(frame: np.ndarray, brightness: float, contrast: float,
                   saturation: float, blur: int) -> np.ndarray:
     """Aplica brillo/contraste/saturación/desenfoque sobre un frame BGR."""
     if brightness != 0.0 or contrast != 1.0:
-        frame = cv2.convertScaleAbs(frame, alpha=contrast, beta=brightness)
+        frame = np.clip(frame.astype(np.float32) * contrast + brightness, 0, 255).astype(np.uint8)
     if saturation != 1.0:
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV).astype(np.float32)
         np.multiply(hsv[:, :, 1], saturation, out=hsv[:, :, 1])

@@ -1202,12 +1202,22 @@ class App(_AppBase):
         self._monitor_cb.config(state="disabled")
         src   = Path(path)
         stype = detect_source_type(src)
-        pw, ph = self.preview_w, self.preview_h
+        # usar tamaño real del canvas para evitar doble-escala con ratio distinto
+        _cw = self.canvas.winfo_width();  _ch = self.canvas.winfo_height()
+        pw = _cw if _cw > 1 else self.preview_w
+        ph = _ch if _ch > 1 else self.preview_h
         first_frame: "np.ndarray | None" = None
         video_meta:  "dict | None"       = None
         if stype == "image":
-            frame = cv2.imread(str(src))
+            frame = cv2.imread(str(src), cv2.IMREAD_UNCHANGED)
             if frame is not None:
+                # compositar canal alfa sobre fondo negro si existe
+                if frame.ndim == 3 and frame.shape[2] == 4:
+                    alpha = frame[:, :, 3:4].astype(np.float32) / 255.0
+                    bgr   = frame[:, :, :3].astype(np.float32)
+                    frame = (bgr * alpha).astype(np.uint8)
+                elif frame.ndim == 2:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
                 first_frame = frame
                 self._show_frame(bgr_to_rgb(fit_frame(frame, pw, ph, self.cover_var.get())))
         elif stype == "video":
@@ -1227,8 +1237,8 @@ class App(_AppBase):
         elif stype == "gif":
             try:
                 from PIL import Image as _PilImg
-                gif = _PilImg.open(str(src))
-                frame_rgb = np.array(gif.convert("RGB"))
+                with _PilImg.open(str(src)) as gif:
+                    frame_rgb = np.array(gif.convert("RGB"))
                 first_frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
                 self._show_frame(bgr_to_rgb(fit_frame(first_frame, pw, ph, self.cover_var.get())))
             except Exception:
@@ -1379,7 +1389,7 @@ class App(_AppBase):
         if iw != pw or ih != ph:
             scale = min(pw / iw, ph / ih)
             nw, nh = int(iw * scale), int(ih * scale)
-            img = img.resize((nw, nh), Image.NEAREST)   # NEAREST >> LANCZOS en tiempo real
+            img = img.resize((nw, nh), Image.BILINEAR)
             if nw != pw or nh != ph:
                 canvas_img = Image.new("RGB", (pw, ph), (0, 0, 0))
                 canvas_img.paste(img, ((pw - nw) // 2, (ph - nh) // 2))
@@ -1481,7 +1491,5 @@ class App(_AppBase):
 
     def _on_close(self):
         self._stop()
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=1.5)
         self._save_prefs()
-        self.destroy()
+        self.destroy()  # UI desaparece inmediatamente; join ocurre tras mainloop()

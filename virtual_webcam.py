@@ -53,3 +53,6 @@ from app import App
 if __name__ == "__main__":
     app = App()
     app.mainloop()
+    # Ventana ya cerrada — dar tiempo al hilo de liberar la cámara sin bloquear UI
+    if app._thread and app._thread.is_alive():
+        app._thread.join(timeout=2.0)

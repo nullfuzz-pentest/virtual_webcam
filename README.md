@@ -1,8 +1,8 @@
-# Virtual Webcam Emulator v1.6
+# Virtual Webcam Emulator v1.7
 
 Emula una webcam virtual usando imágenes, videos o captura de pantalla como fuente, con interfaz gráfica en tiempo real.
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.6-purple)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.7-purple)
 
 ---
 
@@ -15,6 +15,7 @@ Emula una webcam virtual usando imágenes, videos o captura de pantalla como fue
 - Filtros de imagen: zoom digital, brillo, contraste, saturación y desenfoque
 - **Zoom direccional** — el punto de zoom sigue la posición del mouse sobre el preview
 - Overlay de texto e imagen PNG con posicionamiento libre y arrastre con el mouse
+- **Tipos de fuente en overlay** — 12 fuentes OpenCV incluyendo variantes en cursiva
 - Espejo horizontal (flip)
 - Modo Crop (relleno) y Letterbox (barras negras)
 - Seek interactivo en videos
@@ -107,7 +108,17 @@ _app_icon.ico       — icono generado automáticamente al iniciar (Windows)
 
 ## Changelog
 
-### v1.6 (latest)
+### v1.7 (latest)
+
+- **Selección de fuente en overlay**: 12 fuentes OpenCV disponibles en el overlay de texto (Duplex, Simplex, Complex, Triplex, Plain, Small, Script Simplex, Script Complex y variantes en cursiva)
+- **Tamaño de texto ampliado**: slider de tamaño de fuente en overlay extendido hasta 12.0× (antes 4.0×)
+- **Escala de imagen PNG ampliada**: slider de escala en overlay extendido hasta 3.0× (antes 1.0×)
+- **Fix versión en título Halloween**: el tema Halloween ahora muestra correctamente `v1.7` en el título de la ventana
+- **Fix PNG grayscale en overlay**: cargar un PNG en escala de grises como overlay ya no falla silenciosamente — se convierte automáticamente a BGRA
+- **Fix crash post-destroy en CPU poll**: `_poll_cpu` ahora verifica que la ventana exista antes de reprogramarse, evitando `TclError` al cerrar la app
+- **Fix doble llamada en `get_overlay_rects`**: función de posición de texto calculada una sola vez en lugar de dos
+
+### v1.6
 
 - **RAM en barra de estado**: porcentaje de uso de memoria RAM mostrado junto al CPU, actualizado cada 2s (requiere `psutil`)
 - **Icono personalizado en titlebar**: carga `icono.png` y lo aplica como icono de la ventana

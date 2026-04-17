@@ -28,6 +28,7 @@ Estructura de módulos:
 import sys
 import os
 import importlib
+import importlib.util
 
 # Suprime mensajes de FFmpeg (ej. "mmco: unref short failure") en la consola
 os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "-8")   # AV_LOG_QUIET
@@ -41,7 +42,9 @@ try:
 except Exception:
     pass
 
-if importlib.util.find_spec("PIL") is None:
+try:
+    import PIL
+except ImportError:
     print("[ERROR] Pillow not installed. Run: pip install pillow")
     sys.exit(1)
 

@@ -203,7 +203,7 @@ class StreamThread(threading.Thread):
             self.mirror, self.zoom, self.rotation,
             self.filter_brightness, self.filter_contrast,
             self.filter_saturation, self.filter_blur,
-            ov.enabled, ov.text, ov.font_scale,
+            ov.enabled, ov.text, ov.font_scale, ov.font_id,
             ov.text_color_bgr, ov.text_bg_alpha, ov.text_pos, ov.text_xy,
             id(ov.img_bgra), ov.img_pos, ov.img_scale, ov.img_alpha, ov.img_xy,
         )

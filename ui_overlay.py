@@ -15,6 +15,23 @@ import numpy as np
 import constants as _c
 from overlay import OverlayConfig
 
+_CV_FONTS = {
+    "Duplex":          cv2.FONT_HERSHEY_DUPLEX,
+    "Simplex":         cv2.FONT_HERSHEY_SIMPLEX,
+    "Complex":         cv2.FONT_HERSHEY_COMPLEX,
+    "Triplex":         cv2.FONT_HERSHEY_TRIPLEX,
+    "Plain":           cv2.FONT_HERSHEY_PLAIN,
+    "Small":           cv2.FONT_HERSHEY_COMPLEX_SMALL,
+    "Script Simplex":  cv2.FONT_HERSHEY_SCRIPT_SIMPLEX,
+    "Script Complex":  cv2.FONT_HERSHEY_SCRIPT_COMPLEX,
+    "Duplex Italic":   cv2.FONT_HERSHEY_DUPLEX   | cv2.FONT_ITALIC,
+    "Simplex Italic":  cv2.FONT_HERSHEY_SIMPLEX  | cv2.FONT_ITALIC,
+    "Complex Italic":  cv2.FONT_HERSHEY_COMPLEX  | cv2.FONT_ITALIC,
+    "Triplex Italic":  cv2.FONT_HERSHEY_TRIPLEX  | cv2.FONT_ITALIC,
+}
+_CV_FONT_NAMES = list(_CV_FONTS.keys())
+_CV_FONT_IDS   = {v: k for k, v in _CV_FONTS.items()}
+
 
 # ------------------------------------------------------------------
 # Helpers de overlay (usados dentro de open_overlay_window)
@@ -161,9 +178,21 @@ def open_overlay_window(app) -> None:
         size_lbl.config(text=f"{float(v):.1f}")
 
     size_lbl.config(text=f"{ov.font_scale:.1f}")
-    ttk.Scale(r, from_=0.4, to=4.0, orient="horizontal",
+    ttk.Scale(r, from_=0.4, to=12.0, orient="horizontal",
               variable=size_var, command=_upd_size).pack(
         side="left", fill="x", expand=True, padx=(8, 8))
+
+    r = _row(); _lbl(r, "lbl_ovl_font")
+    _cur_font_name = _CV_FONT_IDS.get(ov.font_id, "Duplex")
+    font_var = tk.StringVar(value=_cur_font_name)
+
+    def _upd_font(_, *__):
+        ov.font_id = _CV_FONTS.get(font_var.get(), cv2.FONT_HERSHEY_DUPLEX)
+
+    font_cb = ttk.Combobox(r, textvariable=font_var, values=_CV_FONT_NAMES,
+                           state="readonly", width=18)
+    font_cb.pack(side="left", padx=(0, 4))
+    font_cb.bind("<<ComboboxSelected>>", _upd_font)
 
     r = _row(); _lbl(r, "lbl_ovl_color")
     _color_hex = [f"#{ov.text_color_bgr[2]:02x}{ov.text_color_bgr[1]:02x}{ov.text_color_bgr[0]:02x}"]

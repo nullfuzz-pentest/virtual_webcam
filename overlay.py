@@ -30,6 +30,7 @@ class OverlayConfig:
         # ── texto
         self.text           = ""
         self.font_scale     = 1.0
+        self.font_id        = cv2.FONT_HERSHEY_DUPLEX
         self.text_color_bgr = (255, 255, 255)   # blanco
         self.text_bg_alpha  = 0.5
         self.text_pos       = "bottom-left"
@@ -72,7 +73,7 @@ def apply_overlay(frame_bgr: np.ndarray, ov: OverlayConfig) -> np.ndarray:
 
     # ── texto ─────────────────────────────────────────────────────────────
     if ov.text:
-        font      = cv2.FONT_HERSHEY_DUPLEX
+        font      = ov.font_id
         scale     = ov.font_scale
         thick     = max(1, round(scale * 1.5))
         (tw, th), base = cv2.getTextSize(ov.text, font, scale, thick)
@@ -111,7 +112,7 @@ def get_overlay_rects(ov: OverlayConfig, fw: int, fh: int) -> dict:
             ix, iy = int(_pos[0]), int(_pos[1])
         rects["img"] = (ix, iy, iw, ih)
     if ov.enabled and ov.text:
-        font  = cv2.FONT_HERSHEY_DUPLEX
+        font  = ov.font_id
         scale = ov.font_scale
         thick = max(1, round(scale * 1.5))
         (tw, th), base = cv2.getTextSize(ov.text, font, scale, thick)

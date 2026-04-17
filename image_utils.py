@@ -52,6 +52,8 @@ def fit_frame(frame: np.ndarray, width: int, height: int, cover: bool = True) ->
     cover=False → encaja con barras negras (letterbox).
     """
     h, w = frame.shape[:2]
+    if w == width and h == height:
+        return frame
     if cover:
         scale = max(width / w, height / h)
         nw, nh = int(w * scale), int(h * scale)

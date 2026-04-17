@@ -30,6 +30,7 @@ def open_filter_window(app) -> None:
     win.configure(bg=BG)
     win.resizable(False, False)
     win.attributes("-topmost", True)
+    win.bind("<Escape>", lambda _: win.destroy())
 
     def _slider_row(parent, label_key, var, from_, to_, fmt):
         row = tk.Frame(parent, bg=BG)
@@ -70,11 +71,6 @@ def open_filter_window(app) -> None:
     _slider_row(win, "lbl_contrast",   app._con_var,  0.5,  2.0, lambda v: f"{v:.2f}")
     _slider_row(win, "lbl_saturation", app._sat_var,  0.0,  2.0, lambda v: f"{v:.2f}")
     _slider_row(win, "lbl_blur",       app._blur_var,   0,   10, lambda v: f"{int(v)}")
-
-    app._bri_var.trace_add("write",  lambda *_: _sync_brightness(app._bri_var.get()))
-    app._con_var.trace_add("write",  lambda *_: _sync_contrast(app._con_var.get()))
-    app._sat_var.trace_add("write",  lambda *_: _sync_saturation(app._sat_var.get()))
-    app._blur_var.trace_add("write", lambda *_: _sync_blur(app._blur_var.get()))
 
     def _reset():
         app._bri_var.set(0.0)

@@ -72,7 +72,7 @@ class StreamThread(threading.Thread):
         self.overlay: OverlayConfig = OverlayConfig()
 
         self._pause   = threading.Event()
-        self._stop    = threading.Event()
+        self._stop_event    = threading.Event()
         self._paused  = False
 
         self._seek_lock          = threading.Lock()
@@ -108,7 +108,7 @@ class StreamThread(threading.Thread):
         self._pause.set()
 
     def stop(self):
-        self._stop.set()
+        self._stop_event.set()
         self._pause.set()
 
     def seek(self, frame_no: int):
@@ -204,8 +204,8 @@ class StreamThread(threading.Thread):
             self.filter_brightness, self.filter_contrast,
             self.filter_saturation, self.filter_blur,
             ov.enabled, ov.text, ov.font_scale,
-            ov.text_color_bgr, ov.text_bg_alpha, ov.text_pos,
-            id(ov.img_bgra), ov.img_pos, ov.img_scale, ov.img_alpha,
+            ov.text_color_bgr, ov.text_bg_alpha, ov.text_pos, ov.text_xy,
+            id(ov.img_bgra), ov.img_pos, ov.img_scale, ov.img_alpha, ov.img_xy,
         )
 
     def _process(self, frame_bgr: np.ndarray) -> np.ndarray:
@@ -246,13 +246,14 @@ class StreamThread(threading.Thread):
                 monitor = monitors[idx]
                 # región personalizada toma precedencia sobre el monitor completo
                 grab_target = self.screen_region if self.screen_region else monitor
-                while not self._stop.is_set():
+                while not self._stop_event.is_set():
                     self._pause.wait()
-                    if self._stop.is_set():
+                    if self._stop_event.is_set():
                         break
                     raw = sct.grab(grab_target)
-                    frame_bgra = np.array(raw)
-                    frame_bgr  = cv2.cvtColor(frame_bgra, cv2.COLOR_BGRA2BGR)
+                    frame_bgr  = cv2.cvtColor(np.frombuffer(raw.raw, dtype=np.uint8)
+                                              .reshape(raw.height, raw.width, 4),
+                                              cv2.COLOR_BGRA2BGR)
                     if self.show_cursor:
                         pos = self._get_cursor_pos()
                         if pos:
@@ -274,9 +275,9 @@ class StreamThread(threading.Thread):
                 from PIL import ImageGrab
             except ImportError:
                 raise RuntimeError("Screen capture requires mss:  pip install mss")
-            while not self._stop.is_set():
+            while not self._stop_event.is_set():
                 self._pause.wait()
-                if self._stop.is_set():
+                if self._stop_event.is_set():
                     break
                 if self.screen_region:
                     r = self.screen_region
@@ -314,9 +315,9 @@ class StreamThread(threading.Thread):
         _cached_rgb: "np.ndarray | None" = None
         _cached_sig: "tuple | None"      = None
 
-        while not self._stop.is_set():
+        while not self._stop_event.is_set():
             self._pause.wait()
-            if self._stop.is_set():
+            if self._stop_event.is_set():
                 break
             sig = self._image_sig()
             if sig != _cached_sig:
@@ -339,12 +340,12 @@ class StreamThread(threading.Thread):
 
         _cached: dict = {}   # {i: frame_rgb} para evitar reprocesar frames idénticos
 
-        while not self._stop.is_set():
+        while not self._stop_event.is_set():
             for i, (frame_bgr, duration) in enumerate(frames):
-                if self._stop.is_set():
+                if self._stop_event.is_set():
                     break
                 self._pause.wait()
-                if self._stop.is_set():
+                if self._stop_event.is_set():
                     break
 
                 sig = self._image_sig()
@@ -356,7 +357,7 @@ class StreamThread(threading.Thread):
 
                 # Mantener el frame durante su duración enviando a la cámara al fps del cam
                 end_time = time.monotonic() + duration
-                while time.monotonic() < end_time and not self._stop.is_set():
+                while time.monotonic() < end_time and not self._stop_event.is_set():
                     if cam:
                         cam.send(frame_rgb)
                         cam.sleep_until_next_frame()
@@ -378,9 +379,9 @@ class StreamThread(threading.Thread):
         delay = 1.0 / self.fps
 
         try:
-            while not self._stop.is_set():
+            while not self._stop_event.is_set():
                 self._pause.wait()
-                if self._stop.is_set():
+                if self._stop_event.is_set():
                     break
 
                 with self._seek_lock:

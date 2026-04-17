@@ -166,6 +166,9 @@ class App(_AppBase):
         self._save_after_id: "str | None" = None
         # id del item de canvas que muestra los frames del stream
         self._canvas_img_id: "int | None" = None
+        # frame más reciente pendiente de renderizar (drop de frames obsoletos)
+        self._pending_frame: "np.ndarray | None" = None
+        self._frame_scheduled: bool = False
 
         self._build_ui()
         # aplicar preferencias guardadas que requieren widgets ya creados
@@ -204,11 +207,20 @@ class App(_AppBase):
                 self._rotation_cb.current(deg // 90)
             if "mirror" in _prefs:
                 self.mirror_var.set(bool(_prefs["mirror"]))
+            if "cover" in _prefs:
+                self.cover_var.set(bool(_prefs["cover"]))
+                self._refresh_fit_btn()
         # auto-guardado de preferencias al cambiar filtros / zoom
         for _var in (self._bri_var, self._con_var, self._sat_var,
                      self._blur_var, self._zoom_var):
             _var.trace_add("write", lambda *_: self._schedule_save_prefs())
         self.mirror_var.trace_add("write",    lambda *_: self._schedule_save_prefs())
+        self.cover_var.trace_add("write",     lambda *_: self._schedule_save_prefs())
+        # sync filtros → hilo (aquí para no acumular al reabrir ventana de filtros)
+        self._bri_var.trace_add("write",  lambda *_: self._sync_filter("brightness", self._bri_var.get()))
+        self._con_var.trace_add("write",  lambda *_: self._sync_filter("contrast",   self._con_var.get()))
+        self._sat_var.trace_add("write",  lambda *_: self._sync_filter("saturation", self._sat_var.get()))
+        self._blur_var.trace_add("write", lambda *_: self._sync_filter("blur",       self._blur_var.get()))
         self._rotation_var.trace_add("write", lambda *_: self._schedule_save_prefs())
         self.width_var.trace_add("write",     lambda *_: self._schedule_save_prefs())
         self.height_var.trace_add("write",    lambda *_: self._schedule_save_prefs())
@@ -219,7 +231,9 @@ class App(_AppBase):
         self._setup_dnd()
         self._center_window()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.after(100, self._poll_cpu)
+        if PSUTIL_AVAILABLE:
+            _constants_mod._psutil.cpu_percent(interval=None)  # primera llamada descartada (siempre 0)
+        self.after(2000, self._poll_cpu)
 
     # ------------------------------------------------------------------
     # i18n
@@ -268,6 +282,7 @@ class App(_AppBase):
             "zoom":       self._zoom_var.get(),
             "rotation":   self._rotation_var.get(),
             "mirror":     self.mirror_var.get(),
+            "cover":      self.cover_var.get(),
         }
         try:
             _PREFS_PATH.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
@@ -635,8 +650,9 @@ class App(_AppBase):
         self._lbl_rotation = tk.Label(row3, text=self.t("lbl_rotation"),
                                       font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_DIM)
         self._lbl_rotation.pack(side="left", padx=(8, 4))
+        self._rotation_str_var = tk.StringVar(value="0°")
         self._rotation_cb = ttk.Combobox(
-            row3, textvariable=tk.StringVar(),
+            row3, textvariable=self._rotation_str_var,
             values=["0°", "90°", "180°", "270°"],
             width=5, state="readonly",
         )
@@ -895,6 +911,18 @@ class App(_AppBase):
     # Espejo
     # ------------------------------------------------------------------
 
+    def _sync_filter(self, name: str, value: float):
+        if not (self._thread and self._thread.is_alive()):
+            return
+        if name == "brightness":
+            self._thread.filter_brightness = float(value)
+        elif name == "contrast":
+            self._thread.filter_contrast = float(value)
+        elif name == "saturation":
+            self._thread.filter_saturation = float(value)
+        elif name == "blur":
+            self._thread.filter_blur = int(float(value))
+
     def _toggle_mirror(self):
         # mirror_var ya fue cambiado por el Checkbutton antes de llamar aquí
         new_val = self.mirror_var.get()
@@ -968,7 +996,9 @@ class App(_AppBase):
 
     def _canvas_to_frame(self, cx: float, cy: float) -> tuple:
         cam_w, cam_h = self._get_cam_dims()
-        return cx / self.preview_w * cam_w, cy / self.preview_h * cam_h
+        cw = self.canvas.winfo_width()  or self.preview_w
+        ch = self.canvas.winfo_height() or self.preview_h
+        return cx / cw * cam_w, cy / ch * cam_h
 
     def _on_canvas_press(self, event):
         # Si no hay archivo cargado (placeholder "no signal"), abrir selector
@@ -1320,12 +1350,24 @@ class App(_AppBase):
     # ------------------------------------------------------------------
 
     def _on_frame(self, rgb: np.ndarray):
-        self.after(0, self._show_frame, rgb)
+        # Sobrescribe el frame pendiente — si la UI no alcanzó a renderizar el anterior lo descarta
+        self._pending_frame = rgb
+        if not self._frame_scheduled:
+            self._frame_scheduled = True
+            self.after(0, self._render_pending_frame)
         if self._thread and self._thread.total_frames > 0 and not self._seek_dragging:
             prog    = self._thread.current_frame / self._thread.total_frames
             elapsed = self._thread.current_frame / max(self._thread.src_fps, 1)
             total   = self._thread.total_frames  / max(self._thread.src_fps, 1)
             self.after(0, self._update_progress, prog, elapsed, total)
+
+    def _render_pending_frame(self):
+        self._frame_scheduled = False
+        rgb = self._pending_frame
+        if rgb is None:
+            return
+        self._pending_frame = None
+        self._show_frame(rgb)
 
     def _show_frame(self, rgb: np.ndarray):
         img = Image.fromarray(rgb)
@@ -1335,10 +1377,9 @@ class App(_AppBase):
         pw = _cw if _cw > 1 else self.preview_w
         ph = _ch if _ch > 1 else self.preview_h
         if iw != pw or ih != ph:
-            # letterbox: mantiene aspect ratio, sin distorsión
             scale = min(pw / iw, ph / ih)
             nw, nh = int(iw * scale), int(ih * scale)
-            img = img.resize((nw, nh), Image.LANCZOS)
+            img = img.resize((nw, nh), Image.NEAREST)   # NEAREST >> LANCZOS en tiempo real
             if nw != pw or nh != ph:
                 canvas_img = Image.new("RGB", (pw, ph), (0, 0, 0))
                 canvas_img.paste(img, ((pw - nw) // 2, (ph - nh) // 2))

@@ -109,6 +109,7 @@ def open_overlay_window(app) -> None:
     win.configure(bg=BG)
     win.resizable(False, False)
     win.attributes("-topmost", True)
+    win.bind("<Escape>", lambda _: win.destroy())
 
     def _lbl(parent, key):
         tk.Label(parent, text=app.t(key), width=14, anchor="w",
@@ -235,11 +236,11 @@ def open_overlay_window(app) -> None:
 
     def _upd_scale(v):
         ov.img_scale = float(v)
-        sc_lbl.config(text=f"{float(v):.0%}")
+        sc_lbl.config(text=f"{float(v):.2f}×")
         _reload_overlay_image(app)
 
-    sc_lbl.config(text=f"{ov.img_scale:.0%}")
-    ttk.Scale(r, from_=0.05, to=1.0, orient="horizontal",
+    sc_lbl.config(text=f"{ov.img_scale:.2f}×")
+    ttk.Scale(r, from_=0.05, to=3.0, orient="horizontal",
               variable=sc_var, command=_upd_scale).pack(
         side="left", fill="x", expand=True, padx=(8, 8))
 

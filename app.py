@@ -412,6 +412,10 @@ class App(_AppBase):
             self._lbl_halloween.pack_forget()
             self.title("Virtual Webcam v1.7")
 
+        # canvas items (texto/bordes del placeholder) no son widgets — redibujar
+        if not (self._thread and self._thread.is_alive()):
+            self._draw_placeholder()
+
     @staticmethod
     def _recolor_widget(w, old_new: dict):
         """Actualiza los colores de un widget según el mapa {hex_viejo: hex_nuevo}."""

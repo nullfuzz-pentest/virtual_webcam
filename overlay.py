@@ -120,6 +120,7 @@ def get_overlay_rects(ov: OverlayConfig, fw: int, fh: int) -> dict:
             bx, by_top = int(ov.text_xy[0] * fw), int(ov.text_xy[1] * fh)
         else:
             fn = _OV_POSITIONS.get(ov.text_pos, _OV_POSITIONS["bottom-left"])
-            bx, by_top = int(fn(fw, fh, tw, th + base)[0]), int(fn(fw, fh, tw, th + base)[1])
+            _pos = fn(fw, fh, tw, th + base)
+            bx, by_top = int(_pos[0]), int(_pos[1])
         rects["text"] = (bx, by_top, tw, th + base)
     return rects

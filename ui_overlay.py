@@ -43,7 +43,9 @@ def _load_overlay_image(app, path: str) -> None:
         img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
         if img is None:
             return
-        if img.shape[2] == 3:
+        if img.ndim == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGRA)
+        elif img.shape[2] == 3:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
         app._overlay.img_path = path
         _apply_overlay_scale(app, img)

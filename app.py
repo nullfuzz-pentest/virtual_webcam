@@ -123,7 +123,7 @@ class _RegionPicker:
 class App(_AppBase):
     def __init__(self):
         super().__init__()
-        self.title("Virtual Webcam v1.6")
+        self.title("Virtual Webcam v1.7")
         self.configure(bg=BG)
         self.resizable(True, True)
         self.minsize(640, 480)
@@ -407,10 +407,10 @@ class App(_AppBase):
         if name == "halloween":
             self._lbl_halloween.config(bg=theme["BG"])
             self._lbl_halloween.pack(side="left", padx=(6, 0))
-            self.title("🎃 Virtual Webcam 💀")
+            self.title("🎃 Virtual Webcam v1.7 💀")
         else:
             self._lbl_halloween.pack_forget()
-            self.title("Virtual Webcam v1.6")
+            self.title("Virtual Webcam v1.7")
 
     @staticmethod
     def _recolor_widget(w, old_new: dict):
@@ -1408,6 +1408,11 @@ class App(_AppBase):
         self.time_label.config(text=f"{fmt(elapsed)} / {fmt(total)}")
 
     def _poll_cpu(self):
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
         if PSUTIL_AVAILABLE:
             cpu = _constants_mod._psutil.cpu_percent(interval=None)
             mem = _constants_mod._psutil.virtual_memory().percent

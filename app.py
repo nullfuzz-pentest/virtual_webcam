@@ -1033,6 +1033,9 @@ class App(_AppBase):
         if self._drag_overlay_type == "text":
             ov.text_pos = "custom"
             ov.text_xy  = (ox, oy)
+        elif self._drag_overlay_type == "clock":
+            ov.clock_pos = "custom"
+            ov.clock_xy  = (ox, oy)
         else:
             ov.img_pos = "custom"
             ov.img_xy  = (ox, oy)

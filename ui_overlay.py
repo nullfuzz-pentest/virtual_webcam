@@ -92,7 +92,8 @@ def _build_pos_grid(app, parent: tk.Frame, ov: OverlayConfig, attr: str) -> None
             if not lbl:
                 tk.Label(grid, width=3, bg=BG).grid(row=ri, column=ci)
                 continue
-            xy_attr = "text_xy" if attr == "text_pos" else "img_xy"
+            _xy_map = {"text_pos": "text_xy", "img_pos": "img_xy", "clock_pos": "clock_xy"}
+            xy_attr = _xy_map.get(attr, "text_xy")
             rb = tk.Radiobutton(
                 grid, text=lbl, value=pos, variable=var,
                 command=lambda p=pos, a=attr, xa=xy_attr: (
@@ -287,6 +288,84 @@ def open_overlay_window(app) -> None:
     al_lbl.config(text=f"{ov.img_alpha:.0%}")
     ttk.Scale(r, from_=0.0, to=1.0, orient="horizontal",
               variable=al_var, command=_upd_alpha).pack(
+        side="left", fill="x", expand=True, padx=(8, 8))
+
+    # ══════════════════ RELOJ ══════════════════
+    tk.Frame(win, bg=BG_BTN, height=1).pack(fill="x", padx=16, pady=(8, 0))
+    _section("ovl_section_clock")
+
+    r = _row()
+    clock_en_var = tk.BooleanVar(value=ov.clock_enabled)
+
+    def _toggle_clock():
+        ov.clock_enabled = clock_en_var.get()
+
+    tk.Checkbutton(r, text=app.t("lbl_ovl_clock_en"), variable=clock_en_var,
+                   command=_toggle_clock,
+                   font=("Segoe UI", 9), bg=BG, fg=FG,
+                   activebackground=BG, selectcolor=BG_BTN,
+                   cursor="hand2").pack(side="left")
+
+    r = _row(); _lbl(r, "lbl_ovl_clock_fmt")
+    fmt_var = tk.StringVar(value=ov.clock_format)
+    tk.Entry(r, textvariable=fmt_var, width=20,
+             bg=BG_BTN, fg=FG, insertbackground=FG,
+             relief="flat", font=("Consolas", 9)).pack(side="left", fill="x", expand=True)
+
+    def _upd_fmt(*_):
+        ov.clock_format = fmt_var.get()
+
+    fmt_var.trace_add("write", _upd_fmt)
+
+    r = _row(); _lbl(r, "lbl_ovl_clock_size")
+    ck_size_var = tk.DoubleVar(value=ov.clock_font_scale)
+    ck_size_lbl = tk.Label(r, width=4, anchor="e", font=("Consolas", 9), bg=BG, fg=ACCENT2)
+    ck_size_lbl.pack(side="right")
+
+    def _upd_ck_size(v):
+        ov.clock_font_scale = float(v)
+        ck_size_lbl.config(text=f"{float(v):.1f}")
+
+    ck_size_lbl.config(text=f"{ov.clock_font_scale:.1f}")
+    ttk.Scale(r, from_=0.4, to=6.0, orient="horizontal",
+              variable=ck_size_var, command=_upd_ck_size).pack(
+        side="left", fill="x", expand=True, padx=(8, 8))
+
+    r = _row(); _lbl(r, "lbl_ovl_clock_color")
+    _ck_color_hex = [f"#{ov.clock_color_bgr[2]:02x}{ov.clock_color_bgr[1]:02x}{ov.clock_color_bgr[0]:02x}"]
+    ck_color_preview = tk.Label(r, width=3, bg=_ck_color_hex[0], relief="flat")
+    ck_color_preview.pack(side="left", padx=(0, 6))
+
+    def _pick_clock_color():
+        import tkinter.colorchooser as cc
+        result = cc.askcolor(color=_ck_color_hex[0], parent=win)
+        if result[1]:
+            _ck_color_hex[0] = result[1]
+            ck_color_preview.config(bg=result[1])
+            hx = result[1].lstrip("#")
+            r2, g2, b2 = int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16)
+            ov.clock_color_bgr = (b2, g2, r2)
+
+    tk.Button(r, text=app.t("btn_pick_color"), command=_pick_clock_color,
+              bg=BG_BTN, fg=FG, activebackground=ACCENT, activeforeground="#fff",
+              relief="flat", font=("Segoe UI", 9), padx=8, pady=2,
+              cursor="hand2", bd=0).pack(side="left")
+
+    r = _row(); _lbl(r, "lbl_ovl_clock_pos")
+    _build_pos_grid(app, r, ov, "clock_pos")
+
+    r = _row(); _lbl(r, "lbl_ovl_clock_bg")
+    ck_bg_var = tk.DoubleVar(value=ov.clock_bg_alpha)
+    ck_bg_lbl = tk.Label(r, width=4, anchor="e", font=("Consolas", 9), bg=BG, fg=ACCENT2)
+    ck_bg_lbl.pack(side="right")
+
+    def _upd_ck_bg(v):
+        ov.clock_bg_alpha = float(v)
+        ck_bg_lbl.config(text=f"{float(v):.0%}")
+
+    ck_bg_lbl.config(text=f"{ov.clock_bg_alpha:.0%}")
+    ttk.Scale(r, from_=0.0, to=1.0, orient="horizontal",
+              variable=ck_bg_var, command=_upd_ck_bg).pack(
         side="left", fill="x", expand=True, padx=(8, 8))
 
     tk.Frame(win, bg=BG, height=10).pack()

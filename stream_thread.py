@@ -206,6 +206,9 @@ class StreamThread(threading.Thread):
             ov.enabled, ov.text, ov.font_scale, ov.font_id,
             ov.text_color_bgr, ov.text_bg_alpha, ov.text_pos, ov.text_xy,
             id(ov.img_bgra), ov.img_pos, ov.img_scale, ov.img_alpha, ov.img_xy,
+            ov.clock_enabled, ov.clock_format, ov.clock_font_scale, ov.clock_font_id,
+            ov.clock_color_bgr, ov.clock_bg_alpha, ov.clock_pos, ov.clock_xy,
+            int(time.monotonic()) if ov.clock_enabled else 0,
         )
 
     def _process(self, frame_bgr: np.ndarray) -> np.ndarray:

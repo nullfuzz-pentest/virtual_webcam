@@ -5,6 +5,8 @@ Configuración y renderizado del overlay de texto e imagen PNG
 que se superpone sobre cada frame antes de enviarlo a la cámara.
 """
 
+import datetime
+
 import cv2
 import numpy as np
 
@@ -42,6 +44,15 @@ class OverlayConfig:
         self.img_scale      = 0.25
         self.img_alpha      = 1.0
         self.img_xy: "tuple[float, float] | None" = None   # posición libre (0..1)
+        # ── reloj dinámico
+        self.clock_enabled     = False
+        self.clock_format      = "%H:%M:%S"
+        self.clock_font_scale  = 1.0
+        self.clock_font_id     = cv2.FONT_HERSHEY_DUPLEX
+        self.clock_color_bgr   = (255, 255, 255)
+        self.clock_bg_alpha    = 0.5
+        self.clock_pos         = "top-right"
+        self.clock_xy: "tuple[float, float] | None" = None
 
 
 def apply_overlay(frame_bgr: np.ndarray, ov: OverlayConfig) -> np.ndarray:
@@ -96,6 +107,31 @@ def apply_overlay(frame_bgr: np.ndarray, ov: OverlayConfig) -> np.ndarray:
                 out[ry1:ry2, rx1:rx2] = (bg * ov.text_bg_alpha + roi * (1 - ov.text_bg_alpha)).astype(np.uint8)
         cv2.putText(out, ov.text, (bx, ty), font, scale,
                     ov.text_color_bgr, thick, cv2.LINE_AA)
+
+    # ── reloj dinámico ────────────────────────────────────────────────────
+    if ov.clock_enabled and ov.clock_format:
+        clock_text = datetime.datetime.now().strftime(ov.clock_format)
+        font  = ov.clock_font_id
+        scale = ov.clock_font_scale
+        thick = max(1, round(scale * 1.5))
+        (cw, ch), cbase = cv2.getTextSize(clock_text, font, scale, thick)
+        if ov.clock_xy is not None:
+            cbx, cby_top = int(ov.clock_xy[0] * fw), int(ov.clock_xy[1] * fh)
+        else:
+            fn = _OV_POSITIONS.get(ov.clock_pos, _OV_POSITIONS["top-right"])
+            _cpos = fn(fw, fh, cw, ch + cbase)
+            cbx, cby_top = int(_cpos[0]), int(_cpos[1])
+        cty = cby_top + ch
+        pad = 4
+        if ov.clock_bg_alpha > 0:
+            rx1 = max(0, cbx - pad);     rx2 = min(fw, cbx + cw + pad)
+            ry1 = max(0, cby_top - pad); ry2 = min(fh, cty + cbase + pad)
+            if rx2 > rx1 and ry2 > ry1:
+                roi = out[ry1:ry2, rx1:rx2].astype(np.float32)
+                bg  = np.zeros_like(roi)
+                out[ry1:ry2, rx1:rx2] = (bg * ov.clock_bg_alpha + roi * (1 - ov.clock_bg_alpha)).astype(np.uint8)
+        cv2.putText(out, clock_text, (cbx, cty), font, scale,
+                    ov.clock_color_bgr, thick, cv2.LINE_AA)
     return out
 
 
@@ -123,4 +159,17 @@ def get_overlay_rects(ov: OverlayConfig, fw: int, fh: int) -> dict:
             _pos = fn(fw, fh, tw, th + base)
             bx, by_top = int(_pos[0]), int(_pos[1])
         rects["text"] = (bx, by_top, tw, th + base)
+    if ov.enabled and ov.clock_enabled and ov.clock_format:
+        clock_text = datetime.datetime.now().strftime(ov.clock_format)
+        font  = ov.clock_font_id
+        scale = ov.clock_font_scale
+        thick = max(1, round(scale * 1.5))
+        (cw, ch), cbase = cv2.getTextSize(clock_text, font, scale, thick)
+        if ov.clock_xy is not None:
+            cbx, cby_top = int(ov.clock_xy[0] * fw), int(ov.clock_xy[1] * fh)
+        else:
+            fn = _OV_POSITIONS.get(ov.clock_pos, _OV_POSITIONS["top-right"])
+            _cpos = fn(fw, fh, cw, ch + cbase)
+            cbx, cby_top = int(_cpos[0]), int(_cpos[1])
+        rects["clock"] = (cbx, cby_top, cw, ch + cbase)
     return rects
